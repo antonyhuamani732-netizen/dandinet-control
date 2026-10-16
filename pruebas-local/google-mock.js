@@ -103,6 +103,7 @@ function crearGoogle(opts = {}) {
       getFoldersByName: (n) => iter(c.hijos.filter((h) => h.nombre === n)),
       createFolder: (n) => { const h = nuevaCarpeta(n); c.hijos.push(h); return h; },
       getFiles: () => iter(c.files),
+      setTrashed: (v) => { c.papelera = v; },
     });
     carpetas[c.id] = c;
     return c;
@@ -114,6 +115,7 @@ function crearGoogle(opts = {}) {
     getParents: () => iter([]),
     makeCopy: (nombre, carpeta) => { const f = { getName: () => nombre, getDateCreated: () => new Date(), setTrashed: () => {} }; if (carpeta) carpeta.files.push(f); return f; },
     moveTo: () => {},
+    setTrashed: () => {},
   });
 
   let lockTomado = false;
@@ -140,7 +142,7 @@ function crearGoogle(opts = {}) {
         hasLock: () => lockTomado,
       }),
     },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: (k) => { delete props[k]; } }) },
     Session: { getActiveUser: () => ({ getEmail: () => usuario }), getEffectiveUser: () => ({ getEmail: () => usuario }) },
     Utilities: {
       getUuid: () => crypto.randomUUID(),

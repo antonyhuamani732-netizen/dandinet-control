@@ -4,7 +4,7 @@
   "private": true,
   "description": "D@NDINET: sistema de cobranza ISP (PWA offline + Google Apps Script + Google Sheets)",
   "scripts": {
-    "probar": "node pruebas-local/cuadre.js && node pruebas-local/fase1.js",
+    "probar": "node pruebas-local/cuadre.js && node pruebas-local/fase1.js && node pruebas-local/fase2.js",
     "subir:pruebas": "clasp -P .clasp.pruebas.json push --force",
     "subir:prod": "clasp -P .clasp.produccion.json push --force",
     "abrir:pruebas": "clasp -P .clasp.pruebas.json open-script",

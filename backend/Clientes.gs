@@ -35,7 +35,7 @@ function op_nuevoCliente(ctx, d, usuario) {
   nuevaFila(ctx, 'Clientes', {
     ID_CLIENTE: id, DNI_RUC: doc, NOMBRES: s('NOMBRES').toUpperCase(), TELEFONO: tel, TELEFONO2: tel2,
     DIRECCION: s('DIRECCION').toUpperCase(), REFERENCIA: s('REFERENCIA'), ZONA: zona, COORDENADAS: s('COORDENADAS'),
-    FECHA_ALTA: deDia(alta), DIA_VENC: dia, OBSERVACIONES: s('OBSERVACIONES'), F_MODIF: new Date(), USR_MODIF: usuario
+    FECHA_ALTA: deDia(alta), DIA_VENC: dia, OBSERVACIONES: s('OBSERVACIONES'), USR_MODIF: usuario
   });
   nuevaFila(ctx, 'ClientesPriv', { ID_CLIENTE: id, USUARIO_WIFI: s('USUARIO_WIFI'), CLAVE_WIFI: s('CLAVE_WIFI'),
     USUARIO_ROUTER: s('USUARIO_ROUTER'), CLAVE_ROUTER: s('CLAVE_ROUTER') });
@@ -109,6 +109,77 @@ function prorrateoAlta(tarifa, diaAlta) {
   var dias = diasMes - p.d + 1;
   var aplica = p.d > 1 && String(cfg('ProrratearAlta')) !== NO;
   return { aplica: aplica, dias: dias, diasMes: diasMes, monto: aplica ? r2(tarifa * dias / diasMes) : r2(tarifa) };
+}
+
+/**
+ * Edición de un cliente existente. d = { ID_CLIENTE, y SOLO los campos que cambian }.
+ * Valida el resultado final con las mismas reglas del alta y deja en la Bitácora
+ * cada campo cambiado con su valor anterior y el nuevo (trazabilidad).
+ * Las claves WiFi/router se guardan en ClientesPriv; en la Bitácora solo se anota que cambiaron.
+ */
+var CAMPOS_CLIENTE_EDITABLES = ['DNI_RUC', 'NOMBRES', 'TELEFONO', 'TELEFONO2', 'DIRECCION', 'REFERENCIA', 'ZONA',
+  'COORDENADAS', 'FECHA_ALTA', 'DIA_VENC', 'OBSERVACIONES'];
+var CAMPOS_CLIENTE_PRIV = ['USUARIO_WIFI', 'CLAVE_WIFI', 'USUARIO_ROUTER', 'CLAVE_ROUTER'];
+
+function op_editarCliente(ctx, d, usuario) {
+  exigirRol(ctx, usuario, ['ADMIN']);
+  var id = String(d.ID_CLIENTE || '').trim();
+  var tC = ctx.t('Clientes'), fc = buscar(ctx, 'Clientes', 'ID_CLIENTE', id);
+  if (fc < 0) throw errNeg('Cliente ' + id + ' no encontrado.');
+  var nuevo = {}, cambios = [];
+  CAMPOS_CLIENTE_EDITABLES.forEach(function (k) {
+    var actual = val(tC, fc, k);
+    nuevo[k] = d[k] === undefined ? actual : d[k];
+  });
+  var s = function (k) { return String(nuevo[k] === undefined || nuevo[k] === null ? '' : nuevo[k]).trim(); };
+  // ---- mismas reglas que el alta ----
+  var doc = s('DNI_RUC'), tel = s('TELEFONO'), tel2 = s('TELEFONO2');
+  if (d.DNI_RUC !== undefined && !docValido(doc)) throw errNeg('DNI/RUC inválido: el DNI debe tener 8 dígitos y el RUC 11 (empieza con 10, 15, 17 o 20).');
+  if (!s('NOMBRES')) throw errNeg('El nombre es obligatorio.');
+  // un teléfono heredado inválido no bloquea otras ediciones; si se cambia, debe ser válido
+  if (d.TELEFONO !== undefined && !telefonoValido(tel)) throw errNeg('Teléfono inválido: debe tener 9 dígitos y empezar con 9.');
+  if (d.TELEFONO2 !== undefined && tel2 && !telefonoValido(tel2)) throw errNeg('Teléfono 2 inválido (9 dígitos, empieza con 9) o déjelo vacío.');
+  if (!s('DIRECCION')) throw errNeg('La dirección es obligatoria.');
+  var zona = s('ZONA').toUpperCase(), zonas = lista(ctx, 'ZONA');
+  if (!zona) throw errNeg('Seleccione la zona.');
+  if (d.ZONA !== undefined && zonas.length && zonas.indexOf(zona) < 0) throw errNeg('La zona "' + zona + '" no está en la lista.');
+  if (aDia(nuevo.FECHA_ALTA) === null) throw errNeg('Fecha de alta inválida.');
+  var dia = s('DIA_VENC') === '' ? '' : parseInt(s('DIA_VENC'), 10);
+  if (dia !== '' && !(dia >= 1 && dia <= 28)) throw errNeg('El día de vencimiento debe estar entre 1 y 28.');
+  if (d.DNI_RUC !== undefined) {
+    var t = ctx.t('Clientes');
+    for (var i = 0; i < t.datos.length; i++) {
+      if (i !== fc && String(t.datos[i][t.c.DNI_RUC]) === doc) throw errNeg('El DNI/RUC ' + doc + ' ya está registrado: ' + t.datos[i][t.c.ID_CLIENTE] + '.');
+    }
+  }
+  // ---- normalizar y aplicar solo lo que cambió ----
+  var normal = { DNI_RUC: doc, NOMBRES: s('NOMBRES').toUpperCase(), TELEFONO: tel, TELEFONO2: tel2, DIRECCION: s('DIRECCION').toUpperCase(),
+    REFERENCIA: s('REFERENCIA'), ZONA: zona, COORDENADAS: s('COORDENADAS'), FECHA_ALTA: deDia(aDia(nuevo.FECHA_ALTA)),
+    DIA_VENC: dia, OBSERVACIONES: s('OBSERVACIONES') };
+  CAMPOS_CLIENTE_EDITABLES.forEach(function (k) {
+    if (d[k] === undefined) return;
+    var antes = val(tC, fc, k);
+    if (_igual(antes, normal[k]) || String(antes) === String(normal[k])) return;
+    setV(ctx, 'Clientes', fc, k, normal[k]);
+    cambios.push(k + ': "' + (antes instanceof Date ? txtFecha(aDia(antes)) : antes) + '" → "' +
+      (normal[k] instanceof Date ? txtFecha(aDia(normal[k])) : normal[k]) + '"');
+  });
+  // ---- claves WiFi / router ----
+  var ip = buscar(ctx, 'ClientesPriv', 'ID_CLIENTE', id);
+  if (ip < 0) ip = nuevaFila(ctx, 'ClientesPriv', { ID_CLIENTE: id });
+  CAMPOS_CLIENTE_PRIV.forEach(function (k) {
+    if (d[k] === undefined) return;
+    var v = String(d[k] === null ? '' : d[k]).trim();
+    if (String(val(ctx.t('ClientesPriv'), ip, k)) === v) return;
+    setV(ctx, 'ClientesPriv', ip, k, v);
+    cambios.push(k + ' (cambiada)');
+  });
+  if (!cambios.length) return { idCliente: id, cambios: [] };
+  setV(ctx, 'Clientes', fc, 'USR_MODIF', usuario);
+  // nombre y zona se copian en otras tablas: el recálculo del cliente los actualiza
+  tocar(ctx, id);
+  bitacora(ctx, usuario, 'EDITAR_CLIENTE', 'Clientes', id, cambios.join(' | '));
+  return { idCliente: id, cambios: cambios };
 }
 
 // ---- Versiones públicas ----------------------------------------------------------------

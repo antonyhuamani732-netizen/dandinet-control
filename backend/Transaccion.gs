@@ -12,8 +12,11 @@
  *   7. Suelta el candado.
  */
 
-/** Error de negocio: un mensaje claro para el usuario (no es una falla del sistema). */
-function errNeg(msg) { var e = new Error(msg); e.negocio = true; return e; }
+/**
+ * Error de negocio: un mensaje claro para el usuario (no es una falla del sistema).
+ * codigo (opcional): VALIDACION (por defecto) | OCUPADO | NO_AUTORIZADO | PROHIBIDO.
+ */
+function errNeg(msg, codigo) { var e = new Error(msg); e.negocio = true; e.codigo = codigo || 'VALIDACION'; return e; }
 
 /**
  * Orden de escritura: primero los datos, después Solicitudes (idempotencia) y AL FINAL el contador (Config).
@@ -30,7 +33,7 @@ var ORDEN_GUARDADO = ['PagosDet', 'Pagos', 'Comprobantes', 'PagosRevisar', 'Carg
  */
 function transaccion(fn) {
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw errNeg('El sistema está ocupado procesando otra operación. Intente de nuevo en un momento.');
+  if (!lock.tryLock(30000)) throw errNeg('El sistema está ocupado procesando otra operación. Intente de nuevo en un momento.', 'OCUPADO');
   try {
     _cfgCache = null;                       // Config siempre fresca dentro del candado
     var ctx = abrirContexto();
@@ -108,12 +111,20 @@ function siguienteId(ctx, nombre, col, prefijo, digitos) {
 /** Marca un cliente para recalcularlo al final de la transacción. */
 function tocar(ctx, idCliente) { if (idCliente) ctx.tocados[String(idCliente)] = true; }
 
-/** Agrega una línea a la Bitácora (se escribe al final, si todo salió bien). */
-function bitacora(ctx, usuario, accion, entidad, idEntidad, detalle) {
-  ctx.bitacora.push(ESQUEMA.Bitacora.cols.map(function (c) {
-    return { ID: 'BIT-' + Utilities.getUuid().substr(0, 8).toUpperCase(), FECHA_HORA: new Date(), USUARIO: usuario,
-             ACCION: accion, ENTIDAD: entidad, ID_ENTIDAD: idEntidad, DETALLE: String(detalle || '').substr(0, 500) }[c];
-  }));
+/**
+ * Agrega una línea a la Bitácora (se escribe al final, si todo salió bien).
+ * Lleva el ID_SOLICITUD de la operación en curso (ctx.idSolicitud) y su RESULTADO (OK por defecto).
+ */
+function bitacora(ctx, usuario, accion, entidad, idEntidad, detalle, resultado) {
+  ctx.bitacora.push(filaBitacora_(usuario, accion, entidad, idEntidad, detalle, ctx.idSolicitud, resultado || 'OK'));
+}
+
+/** Fila de la Bitácora lista para escribir. */
+function filaBitacora_(usuario, accion, entidad, idEntidad, detalle, idSolicitud, resultado) {
+  var o = { ID: 'BIT-' + Utilities.getUuid().substr(0, 8).toUpperCase(), FECHA_HORA: new Date(), USUARIO: usuario,
+            ACCION: accion, ENTIDAD: entidad || '', ID_ENTIDAD: idEntidad || '', DETALLE: String(detalle || '').substr(0, 500),
+            ID_SOLICITUD: idSolicitud || '', RESULTADO: resultado || 'OK' };
+  return ESQUEMA.Bitacora.cols.map(function (c) { return o[c] === undefined ? '' : o[c]; });
 }
 
 /** Escribe en la hoja solo lo que cambió: filas modificadas (en bloques contiguos) y filas nuevas. */
@@ -239,8 +250,8 @@ function usuarioDe(ctx, email) {
 /** Lanza error si el usuario no tiene uno de los roles indicados. Devuelve el usuario. */
 function exigirRol(ctx, email, roles) {
   var u = usuarioDe(ctx, email);
-  if (!u || !u.activo) throw errNeg('El usuario ' + (email || '(vacío)') + ' no está registrado o está inactivo en la tabla Usuarios.');
-  if (roles.indexOf(u.rol) < 0) throw errNeg('Su rol (' + u.rol + ') no permite esta acción. Requiere: ' + roles.join(' o ') + '.');
+  if (!u || !u.activo) throw errNeg('El usuario ' + (email || '(vacío)') + ' no está registrado o está inactivo en la tabla Usuarios.', 'NO_AUTORIZADO');
+  if (roles.indexOf(u.rol) < 0) throw errNeg('Su rol (' + u.rol + ') no permite esta acción. Requiere: ' + roles.join(' o ') + '.', 'PROHIBIDO');
   return u;
 }
 

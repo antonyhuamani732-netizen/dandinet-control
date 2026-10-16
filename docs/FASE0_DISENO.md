@@ -100,6 +100,7 @@ Dentro del candado: `n = max(Config.UltRecibo, mayor N° en Pagos) + 1`. Se escr
 | `OCUPADO` | No se consiguió el candado | Reintento con espera exponencial (2, 4, 8, 16 s…) |
 | `VERSION` | La app es demasiado antigua | Muestra "Actualizar" |
 | `INTERNO` | Error inesperado del servidor | Reintento; si persiste, aviso al ADMIN |
+| `PROHIBIDO` | El rol no permite la acción (agregado en la Fase 2) | Muestra el mensaje |
 
 **Fechas en la API:** siempre texto `AAAA-MM-DD` (fechas "solo día") y `AAAA-MM-DDTHH:mm:ss-05:00` para fecha y hora. Así no hay desfases entre el navegador, Apps Script y Sheets. **Montos:** número con 2 decimales.
 

@@ -99,7 +99,7 @@ function archivarAnio(anio, usuario) {
     var txt = 'Año ' + anio + ' archivado en "' + hist.getName() + '". Cargos: ' + nC + ', pagos: ' + Object.keys(sel.Pagos).length +
       ', detalle: ' + Object.keys(sel.PagosDet).length + '. Saldo antes ' + soles(saldoAntes) + ', después ' + soles(saldoDesp) +
       '. Pagado archivado: ' + soles(pagadoAntes - sumaPagado_(T2.PagosDet)) + '. ' + (cuadra ? 'CUADRA' : '¡REVISAR! Clientes con diferencia: ' + difCli.join(', '));
-    agregarFilas('Bitacora', [[ 'BIT-' + Utilities.getUuid().substr(0, 8).toUpperCase(), new Date(), usuario, 'ARCHIVAR_ANIO', 'Cargos', String(anio), txt ]]);
+    agregarFilas('Bitacora', [filaBitacora_(usuario, 'ARCHIVAR_ANIO', 'Cargos', String(anio), txt, '', cuadra ? 'OK' : 'REVISAR')]);
     return txt;
   } finally {
     lock.releaseLock();
@@ -116,7 +116,8 @@ function deudaPorCliente_(T) {
 
 /** Libro histórico del año (lo crea la primera vez y guarda su ID en las propiedades del script). */
 function libroHistorico_(anio) {
-  var props = PropertiesService.getScriptProperties(), clave = 'HIST_' + anio, id = props.getProperty(clave);
+  // La clave incluye el ID del libro: así una copia de pruebas nunca toca el histórico del libro real
+  var props = PropertiesService.getScriptProperties(), clave = 'HIST_' + db().getId() + '_' + anio, id = props.getProperty(clave);
   if (id) { try { return SpreadsheetApp.openById(id); } catch (e) { /* se borró: se crea otro */ } }
   var libro = SpreadsheetApp.create('DANDINET_HISTORICO_' + anio + (entorno() === 'PRUEBAS' ? '_PRUEBAS' : ''));
   props.setProperty(clave, libro.getId());
