@@ -1,0 +1,36 @@
+# ============================================================================
+# REPOSITORIO PÚBLICO (GitHub Pages gratuito): SOLO código y documentación.
+# Nunca subir datos de clientes (Ley 29733): nombres, DNI, teléfonos, direcciones,
+# claves WiFi, recibos, vouchers, respaldos ni exportaciones.
+# ============================================================================
+
+# Datos y archivos generados
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.pdf
+migracion.json
+esperado.json
+*_RESULTADO_*
+resultados/
+
+# clasp: solo se ignora un .clasp.json suelto en la raíz. Los de clasp/pruebas y clasp/produccion SÍ se versionan (el scriptId no es secreto)
+/.clasp.json
+
+# Credenciales: jamás al repositorio
+.clasprc.json
+*.pem
+*.key
+.env
+.env.*
+
+# Node y editores
+node_modules/
+npm-debug.log*
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+~$*

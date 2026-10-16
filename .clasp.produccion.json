@@ -1,0 +1,8 @@
+{
+  "scriptId": "106IvoYBmsWSHZNcR9QKAj2fxq0gUvVrYs5-7BZZHbRcJnnD8WxmE_Ndb",
+  "rootDir": "backend",
+  "scriptExtensions": [".gs"],
+  "htmlExtensions": [".html"],
+  "jsonExtensions": [".json"],
+  "skipSubdirectories": true
+}
