@@ -214,7 +214,7 @@ Si al sincronizar el cargo ya fue pagado por otro, o el monto supera el saldo ac
 |---|---|---|
 | Hoja | `DANDINET_DB_PRUEBAS` | `DANDINET_DB` |
 | Proyecto Apps Script | `dandinet-api-pruebas` | `dandinet-api` |
-| PWA | `http://localhost:5500` (y `?entorno=pruebas` en GitHub Pages) | `https://antonyhuamani732-internauta.github.io/dandinet-control/` |
+| PWA | `http://localhost:5500` (y `?entorno=pruebas` en GitHub Pages) | `https://antonyhuamani732-netizen.github.io/dandinet-control/` |
 
 Un solo código, dos proyectos de Apps Script: `npm run subir:pruebas` y `npm run subir:prod` hacen `clasp push` con `.clasp.pruebas.json` o `.clasp.produccion.json`. Cada proyecto guarda el ID de su hoja en *Propiedades del script*, nunca en el código.
 
@@ -223,7 +223,7 @@ Un solo código, dos proyectos de Apps Script: `npm run subir:pruebas` y `npm ru
 ## 8. Repositorio
 
 - Carpeta: **`D:\CLAUDE\PROYECTO_VS_CODE`** como repositorio Git **propio** (el repositorio de `D:\CLAUDE` ya la ignora, así que no se mezclan).
-- GitHub: **`antonyhuamani732-internauta/dandinet-control`**, **público** (requisito de Pages gratuito), rama `main`.
+- GitHub: **`antonyhuamani732-netizen/dandinet-control`**, **público** (requisito de Pages gratuito), rama `main`.
 - Estructura: la de la sección 8 del prompt (`backend/`, `frontend/`, `migracion/`, `docs/`).
 - `backend/` arranca copiando el motor de `PROYECTO_APP/apps-script` (con su historial anotado en el commit), y las pruebas en Node (`pruebas-local/`) se traen también para seguir probando sin Google.
 

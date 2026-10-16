@@ -39,3 +39,7 @@ npm run abrir:pruebas   # abre el editor de Apps Script de PRUEBAS
 
 ## Origen
 El motor es un port del sistema **CONTROL 2026 v2.xlsm** (Excel VBA), primero hecho para la Opción A (AppSheet) en `D:\CLAUDE\PROYECTO_APP` y adaptado aquí a la Opción B.
+
+## Enlaces
+- Repositorio: https://github.com/antonyhuamani732-netizen/dandinet-control
+- App (desde la Fase 4): https://antonyhuamani732-netizen.github.io/dandinet-control/
