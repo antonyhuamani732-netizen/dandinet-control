@@ -12,5 +12,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@google/clasp": "3.4.1"
   }
 }
