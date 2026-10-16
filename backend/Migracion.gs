@@ -233,7 +233,7 @@ function construirFilasMigracion(J, emailAdmin) {
   });
 
   // ---- Config y usuario administrador ---------------------------------------------------
-  CONFIG_DEFECTO.forEach(function (r) {
+  configInicial_().forEach(function (r) {   // incluye los datos privados de CONFIG_LOCAL
     var v = r[0] === 'UltRecibo' ? String(J.ult_recibo) : r[1];
     F.Config.push([r[0], v, r[2]]);
   });

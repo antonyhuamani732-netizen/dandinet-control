@@ -3,6 +3,11 @@
  * --------------------------------------------------------------------------
  * Todo lo que el dueño puede cambiar vive en la pestaña "Config" (CLAVE | VALOR).
  * CONFIG_DEFECTO solo se usa la primera vez para llenarla. Después manda la hoja.
+ *
+ * DATOS PRIVADOS (el repositorio de GitHub es público): el Yape, las cuentas bancarias y el
+ * titular NO están en el código. Se guardan en las Propiedades del script de cada proyecto,
+ * en la propiedad CONFIG_LOCAL (JSON), con guardarConfigLocal(). Al instalar o migrar se
+ * copian a la pestaña Config. Orden de prioridad: pestaña Config > CONFIG_LOCAL > CONFIG_DEFECTO.
  */
 
 // ---- Estados (mismos textos que el Excel v2) ----------------------------------
@@ -21,10 +26,10 @@ var CONFIG_DEFECTO = [
   ['Direccion', '', 'Dirección comercial'],
   ['Telefono', '924802014', 'Teléfono del negocio'],
   ['Email', 'dandinetinfor@gmail.com', 'Correo del negocio'],
-  ['Yape', '', 'N° Yape/Plin para cobros'],
-  ['TitularCobro', '', 'Titular de las cuentas de cobro'],
-  ['BCP', '', 'Cuenta BCP'],
-  ['BN', '', 'Cuenta Banco de la Nación'],
+  ['Yape', '', 'N° Yape/Plin para cobros (privado: CONFIG_LOCAL)'],
+  ['TitularCobro', '', 'Titular de las cuentas de cobro (privado: CONFIG_LOCAL)'],
+  ['BCP', '', 'Cuenta BCP (privado: CONFIG_LOCAL)'],
+  ['BN', '', 'Cuenta Banco de la Nación (privado: CONFIG_LOCAL)'],
   ['DiaVenc', '4', 'Día de vencimiento por defecto (1-28). Del día 1 a este día el mes está "Por vencer"'],
   ['DiasCorte', '30', 'Días de atraso para la alerta "A CORTAR"'],
   ['PrefijoRecibo', 'R-', 'Prefijo del N° de recibo'],
@@ -53,6 +58,36 @@ var CONFIG_DEFECTO = [
   ['UltimoArchivo', '', 'Último año archivado (automático)']
 ];
 
+/** Valores privados de este proyecto (Propiedades del script → CONFIG_LOCAL). {} si no hay. */
+function configLocal_() {
+  try {
+    var t = PropertiesService.getScriptProperties().getProperty('CONFIG_LOCAL');
+    return t ? JSON.parse(t) : {};
+  } catch (e) { return {}; }
+}
+
+/** CONFIG_DEFECTO con los valores privados ya puestos: [[CLAVE, VALOR, DESCRIPCIÓN], ...]. */
+function configInicial_() {
+  var loc = configLocal_();
+  return CONFIG_DEFECTO.map(function (r) { return [r[0], loc[r[0]] !== undefined ? String(loc[r[0]]) : r[1], r[2]]; });
+}
+
+/**
+ * ▶ Guarda los datos privados en este proyecto. Ejemplo (desde la terminal):
+ *   npm run correr:pruebas -- guardarConfigLocal -p '[{"Yape":"9xxxxxxxx","TitularCobro":"...","BCP":"...","BN":"..."}]'
+ * Si el libro ya tiene la pestaña Config con datos, también los actualiza ahí.
+ */
+function guardarConfigLocal(valores) {
+  var loc = configLocal_();
+  Object.keys(valores || {}).forEach(function (k) { loc[k] = String(valores[k]); });
+  PropertiesService.getScriptProperties().setProperty('CONFIG_LOCAL', JSON.stringify(loc));
+  var h = null;
+  try { h = db().getSheetByName('Config'); } catch (e) { h = null; }
+  if (h && h.getLastRow() > 1) Object.keys(valores || {}).forEach(function (k) { setCfg(k, String(valores[k])); });
+  _cfgCache = null;
+  return 'Guardadas ' + Object.keys(loc).length + ' claves privadas: ' + Object.keys(loc).join(', ');
+}
+
 // ---- Lectura con caché (una lectura de la hoja por ejecución) -----------------
 var _cfgCache = null;
 
@@ -60,7 +95,7 @@ var _cfgCache = null;
 function cfg(clave) {
   if (_cfgCache === null) {
     _cfgCache = {};
-    CONFIG_DEFECTO.forEach(function (r) { _cfgCache[r[0]] = r[1]; });
+    configInicial_().forEach(function (r) { _cfgCache[r[0]] = r[1]; });
     if (typeof SpreadsheetApp !== 'undefined') {
       var h = db().getSheetByName('Config');
       if (h && h.getLastRow() > 1) {
@@ -89,7 +124,7 @@ function setCfg(clave, valor) {
 /** Permite a las pruebas fijar la configuración sin hoja. */
 function _cfgFijar(obj) {
   _cfgCache = {};
-  CONFIG_DEFECTO.forEach(function (r) { _cfgCache[r[0]] = r[1]; });
+  configInicial_().forEach(function (r) { _cfgCache[r[0]] = r[1]; });
   Object.keys(obj || {}).forEach(function (k) { _cfgCache[k] = obj[k]; });
 }
 
