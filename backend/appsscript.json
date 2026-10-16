@@ -2,6 +2,9 @@
   "timeZone": "America/Lima",
   "runtimeVersion": "V8",
   "exceptionLogging": "STACKDRIVER",
+  "executionApi": {
+    "access": "MYSELF"
+  },
   "oauthScopes": [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",

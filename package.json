@@ -8,7 +8,9 @@
     "subir:pruebas": "clasp -P .clasp.pruebas.json push --force",
     "subir:prod": "clasp -P .clasp.produccion.json push --force",
     "abrir:pruebas": "clasp -P .clasp.pruebas.json open-script",
-    "abrir:prod": "clasp -P .clasp.produccion.json open-script"
+    "abrir:prod": "clasp -P .clasp.produccion.json open-script",
+    "correr:pruebas": "clasp -u dandinet -P .clasp.pruebas.json run",
+    "correr:prod": "clasp -u dandinet -P .clasp.produccion.json run"
   },
   "engines": {
     "node": ">=20"
