@@ -82,3 +82,13 @@ Producción solo se actualiza cuando una versión ya se probó en PRUEBAS:
 ```bash
 npm run subir:prod
 ```
+
+## ✅ Resultado en Google (16/10/2026, 01:23–01:25)
+Ejecutado desde el navegador integrado con la cuenta `dandinetcontrolclientes@gmail.com`.
+
+| Entorno | Libro | Resultado |
+|---|---|---|
+| PRUEBAS | `DANDINET_DB_PRUEBAS` (carpeta `DANDINET_PRUEBAS`) | **✅ CUADRA**: 16/16 controles OK, 10 avisos heredados en `AvisosMigracion`, Panel con 81 morosos (esperado: faltan pagos posteriores al 04/08/2026) |
+| PRODUCCIÓN | `DANDINET_DB` (carpeta `DANDINET`) | ✅ Estructura creada, vacía |
+
+**Fase 1 cerrada.** Los dos proyectos ya tienen los permisos aceptados.

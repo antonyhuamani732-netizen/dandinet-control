@@ -19,7 +19,7 @@ Sistema de cobranza para el ISP **D@NDINET** (Pangoa, Satipo, Junín): app para 
 | Fase | Documento | Estado |
 |---|---|---|
 | 0. Diseño | [docs/FASE0_DISENO.md](docs/FASE0_DISENO.md) | ✅ Aprobado (16/10/2026) |
-| 1. Hojas, migración y cuadre | [docs/FASE1_INSTALACION.md](docs/FASE1_INSTALACION.md) | 🟡 Cuadra en local; falta ejecutar la instalación en Google |
+| 1. Hojas, migración y cuadre | [docs/FASE1_INSTALACION.md](docs/FASE1_INSTALACION.md) | ✅ CUADRA en Google (16/10/2026) |
 | 2. API, idempotencia y pruebas | | Pendiente |
 | 3. Inicio de sesión con Google | | Pendiente |
 | 4. PWA: búsqueda, ficha y cobro en línea | | Pendiente |
