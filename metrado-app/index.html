@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Metrado CAPECO</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Metrado de estructuras y muros con cantidades de materiales y rendimientos CAPECO.">
+<meta name="theme-color" content="#2b302d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="barra">
+  <div class="marca">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <h1>Metrado CAPECO</h1>
+      <p id="proyecto-actual"></p>
+    </div>
+  </div>
+</header>
+<main id="vista" class="contenido"></main>
+<div id="aviso" class="aviso" role="status" hidden></div>
+<dialog id="hoja" class="hoja" aria-label="Editar elemento"><div id="hoja-contenido"></div></dialog>
+<dialog id="flotante" class="flotante" aria-label="Ventana"><div id="flotante-contenido"></div></dialog>
+<nav class="tabs" aria-label="Secciones">
+  <button type="button" data-vista="partidas">Partidas</button>
+  <button type="button" data-vista="resumen">Resumen</button>
+  <button type="button" data-vista="obra">Obra</button>
+  <button type="button" data-vista="tablas">Tablas</button>
+  <button type="button" data-vista="proyectos">Proyectos</button>
+</nav>
+<script type="module" src="app.js"></script>
+</body>
+</html>

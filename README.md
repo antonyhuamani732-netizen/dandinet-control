@@ -14,6 +14,7 @@ Sistema de cobranza para el ISP **D@NDINET** (Pangoa, Satipo, Junín): app para 
 | `pruebas-local/` | Pruebas en Node con un simulador de Google Sheets (sin tocar Google) |
 | `migracion/` | Cómo se pasan los datos del Excel v2 a Google Sheets |
 | `docs/` | Diseño, guías por fase y manuales |
+| `metrado-app/` | App aparte: metrados, materiales y rendimientos CAPECO ([ver README](metrado-app/README.md)) |
 
 ## Fases
 | Fase | Documento | Estado |
