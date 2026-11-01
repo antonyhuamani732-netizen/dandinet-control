@@ -2,7 +2,7 @@
 // análisis de costos unitarios de CAPECO. Todo es editable desde la pestaña "Tablas";
 // verifícalos con tu edición vigente antes de presupuestar.
 
-export const VERSION_TABLAS = 1;
+export const VERSION_TABLAS = 2;
 
 export const DEFAULTS = {
   // Materiales por m³ de concreto según f'c (kg/cm²), slump 3"–4", piedra 1/2"–3/4".
@@ -36,6 +36,7 @@ export const DEFAULTS = {
     longitudVarilla: 9,
     desperdicio: 3,
     diametros: {
+      '1/4': { nombre: '1/4"', kgm: 0.25, traslape: 0.3, gancho: 0.08, ganchoEstribo: 0.075 },
       '6mm': { nombre: '6 mm', kgm: 0.222, traslape: 0.3, gancho: 0.1, ganchoEstribo: 0.075 },
       '8mm': { nombre: '8 mm', kgm: 0.395, traslape: 0.35, gancho: 0.1, ganchoEstribo: 0.075 },
       '3/8': { nombre: '3/8"', kgm: 0.56, traslape: 0.4, gancho: 0.15, ganchoEstribo: 0.1 },
@@ -57,6 +58,19 @@ export const DEFAULTS = {
     losa_maciza: { nombre: 'Losa maciza', madera: 4.0, clavos: 0.12, alambre: 0.15 },
     losa_aligerada: { nombre: 'Losa aligerada', madera: 3.5, clavos: 0.12, alambre: 0.15 },
     escalera: { nombre: 'Escalera', madera: 6.0, clavos: 0.2, alambre: 0.25 },
+  },
+
+  // Accesorios de encofrado por m² de área encofrada, para un juego (referencial).
+  // puntales/estacas/tornapuntas/cuñas en und; soleras/tablones/barrotes en metros lineales.
+  accesorios: {
+    zapata: { puntales: 0, soleras: 0, tablones: 0, estacas: 1.0, barrotes: 1.5, tornapuntas: 0.6, cunas: 0 },
+    sobrecimiento: { puntales: 0, soleras: 0, tablones: 0, estacas: 0.8, barrotes: 1.5, tornapuntas: 0.8, cunas: 0 },
+    columna: { puntales: 0, soleras: 0, tablones: 0, estacas: 0, barrotes: 2.5, tornapuntas: 0.4, cunas: 0 },
+    viga: { puntales: 0.9, soleras: 0.9, tablones: 0, estacas: 0, barrotes: 1.2, tornapuntas: 0, cunas: 0.9 },
+    placa: { puntales: 0, soleras: 0, tablones: 0, estacas: 0, barrotes: 2.0, tornapuntas: 0.4, cunas: 0 },
+    losa_maciza: { puntales: 1.0, soleras: 1.0, tablones: 0, estacas: 0, barrotes: 0, tornapuntas: 0, cunas: 1.0 },
+    losa_aligerada: { puntales: 1.0, soleras: 1.0, tablones: 2.5, estacas: 0, barrotes: 0, tornapuntas: 0, cunas: 1.0 },
+    escalera: { puntales: 1.2, soleras: 1.0, tablones: 0, estacas: 0, barrotes: 1.0, tornapuntas: 0, cunas: 1.2 },
   },
 
   // Ladrillos: dimensiones en cm (largo x ancho x alto).
@@ -130,4 +144,14 @@ export const ELEMENTOS_ENCOFRADO = {
   losa_maciza: { dims: ['Largo (m)', 'Ancho (m)'], ayuda: 'Área de fondo' },
   losa_aligerada: { dims: ['Largo (m)', 'Ancho (m)'], ayuda: 'Área de fondo' },
   escalera: { dims: ['Ancho (m)', 'Longitud inclinada (m)'], ayuda: 'Fondo de la losa inclinada' },
+};
+
+export const ACCESORIOS = {
+  puntales: { nombre: 'Puntales de madera 2"×3"', und: 'und' },
+  soleras: { nombre: 'Soleras 2"×4"', und: 'm' },
+  tablones: { nombre: 'Tablones 1½"×8"', und: 'm' },
+  estacas: { nombre: 'Estacas', und: 'und' },
+  barrotes: { nombre: 'Barrotes / yugos 2"×3"', und: 'm' },
+  tornapuntas: { nombre: 'Tornapuntas', und: 'und' },
+  cunas: { nombre: 'Cuñas', und: 'und' },
 };
