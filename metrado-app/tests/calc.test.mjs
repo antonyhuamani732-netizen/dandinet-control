@@ -291,3 +291,19 @@ test('varillas por peso + 10 % con REDONDEAR.MAS', () => {
   const v = varillasPorPeso({ '5/8': 687.472, '1/2': 75.501, '3/8': 410.57 }, T);
   assert.deepEqual(v, { '5/8': 55, '1/2': 10, '3/8': 90 });
 });
+
+// ---------- v5: informe ----------
+import { informeHTML, informeTexto } from '../ui/informe.js';
+
+test('informe: HTML con secciones y texto para compartir', () => {
+  const c = el('columna', { n: 2, dims: { b: 0.25, h: 0.25, H: 3 } });
+  const pr = { nombre: 'Prueba', elementos: [c], registros: [], seleccion: { excluidos: {}, modo: 'todo' } };
+  const html = informeHTML(pr, T, { secciones: { mano: false }, elevacion: () => '<svg></svg>' });
+  assert.match(html, /Lista de pedido/);
+  assert.match(html, /Corte de varillas/);
+  assert.match(html, /Doblar a <b>0\.17 × 0\.17 m<\/b>/);
+  assert.doesNotMatch(html, /Mano de obra y plazo/);
+  const txt = informeTexto(pr, T);
+  assert.match(txt, /\*Pedido de acero\*/);
+  assert.match(txt, /varillas de 9 m/);
+});

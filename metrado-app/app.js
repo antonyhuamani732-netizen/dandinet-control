@@ -11,6 +11,7 @@ import { cargar, guardar, uid, restaurarTablas, importar } from './storage.js';
 import { figuraElemento, figuraMalla, figuraArmado } from './ui/figuras.js';
 import { guiaHTML } from './ui/guia.js';
 import { planillaMetradosHTML, planillaAceroHTML, csvPlanillas } from './ui/planilla.js';
+import { informeHTML, informeTexto, seleccionVacia, SECCIONES_INFORME } from './ui/informe.js';
 import { tramosHTML, estribosVivo, PRESETS } from './ui/estribos.js';
 
 const APAREJOS = { soga: 'Soga', cabeza: 'Cabeza', canto: 'Canto' };
@@ -831,7 +832,7 @@ function vistaResumen() {
     <div class="tabla-scroll"><table class="tabla"><thead><tr><th>Categoría</th><th class="n">HH</th><th class="n">Costo</th></tr></thead><tbody>${filasHH}</tbody>
     <tfoot><tr><td>Total</td><td class="n">${fmt(hhTot)}</td><td class="n">${sol(s.costo)}</td></tr></tfoot></table></div>
     <p class="nota">Días por partida con sus cuadrillas; el total asume que no se traslapan. Cantidades con desperdicio según Tablas.</p>
-    <div class="acciones"><button type="button" class="primario" data-act="csv">Exportar selección a Excel (CSV)</button></div>`;
+    <div class="acciones"><button type="button" class="primario" data-act="ver-informe">Ver informe (PDF / compartir)</button><button type="button" class="secundario" data-act="csv">Exportar selección a Excel (CSV)</button></div>`;
 }
 
 function selCheck(k, nombre, els) {
@@ -1086,11 +1087,51 @@ function vistaPlanilla() {
         <button type="button" data-act="planilla" data-v="acero" aria-pressed="${hoja === 'acero'}">Acero</button>
       </div>
       <button type="button" class="secundario chico" data-act="csv-planilla">Exportar a Excel (CSV)</button>
+      <button type="button" class="primario chico" data-act="ver-informe">Informe</button>
     </div>
     ${hoja === 'acero' ? planillaAceroHTML(pr, S.tablas) : planillaMetradosHTML(pr, S.tablas)}`;
 }
 
-const VISTAS = { planilla: vistaPlanilla, partidas: vistaPartidas, resumen: vistaResumen, obra: vistaObra, tablas: vistaTablas, proyectos: vistaProyectos };
+function vistaInforme() {
+  const pr = proyecto();
+  if (!pr) return '<p class="vacio">No hay proyecto seleccionado.</p>';
+  const sec = ui.informeSec ||= {};
+  return `<div class="inf-barra no-imprimir">
+      <button type="button" class="link" data-vista="${ui.vistaPrevia || 'resumen'}">‹ Volver</button>
+      <div class="barra-acciones">
+        <button type="button" class="primario chico" data-act="imprimir">Guardar PDF / imprimir</button>
+        <button type="button" class="secundario chico" data-act="compartir">Compartir</button>
+      </div>
+    </div>
+    <div class="inf-opciones no-imprimir">
+      <span>Incluir:</span>
+      ${Object.entries(SECCIONES_INFORME).map(([k, t]) => `<label class="chk-chip"><input type="checkbox" data-informe="${k}"${sec[k] !== false ? ' checked' : ''}>${esc(t)}</label>`).join('')}
+      <button type="button" class="link" data-vista="resumen">Elegir partidas en Resumen</button>
+    </div>
+    ${seleccionVacia(pr) ? '<p class="vacio">No hay partidas elegidas. Márcalas en Resumen.</p>' : informeHTML(pr, S.tablas, { secciones: sec, elevacion: elevacionHTML })}`;
+}
+
+async function compartirInforme() {
+  const pr = proyecto();
+  const texto = informeTexto(pr, S.tablas);
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `Informe · ${pr.nombre}`, text: texto });
+      return;
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return;
+  }
+  abrirFlotante(`<div class="flot-cab"><h3>Compartir informe</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
+    <p class="nota">Copia el resumen o ábrelo en WhatsApp. Para enviar el informe completo, usa "Guardar PDF" y comparte el archivo.</p>
+    <textarea id="texto-informe" class="texto-compartir" readonly rows="12">${esc(texto)}</textarea>
+    <div class="acciones">
+      <button type="button" class="primario" data-act="copiar-informe">Copiar texto</button>
+      <a class="boton secundario" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">Abrir en WhatsApp</a>
+    </div>`);
+}
+
+const VISTAS = { informe: vistaInforme, planilla: vistaPlanilla, partidas: vistaPartidas, resumen: vistaResumen, obra: vistaObra, tablas: vistaTablas, proyectos: vistaProyectos };
 
 function render() {
   const main = $('#vista');
@@ -1299,6 +1340,18 @@ document.addEventListener('click', (ev) => {
       restaurarTablas(S); ui.confirmar = null; persistir(); render(); aviso('Tablas restauradas');
       break;
     case 'csv': exportarCSV(); break;
+    case 'ver-informe': ui.vistaPrevia = vista; ir('informe'); break;
+    case 'imprimir':
+      document.querySelectorAll('.informe details').forEach((d) => { d.open = true; });
+      window.print();
+      break;
+    case 'compartir': compartirInforme(); break;
+    case 'copiar-informe': {
+      const t = $('#texto-informe');
+      navigator.clipboard?.writeText(t.value).then(() => aviso('Texto copiado')).catch(() => { t.select(); aviso('Selecciona y copia el texto'); });
+      if (!navigator.clipboard) { t.select(); aviso('Selecciona y copia el texto'); }
+      break;
+    }
     case 'planilla': ui.planilla = ds.v; render(); break;
     case 'csv-planilla': descargar(`planilla-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csvPlanillas(pr, S.tablas), 'text/csv;charset=utf-8'); break;
     case 'respaldo': descargar(`metrado-respaldo-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S, null, 1), 'application/json'); break;
@@ -1327,6 +1380,7 @@ document.addEventListener('input', (ev) => {
     return;
   }
   if (el.dataset.t) { setPath(S.tablas, el.dataset.t, num(el.value)); persistir(); return; }
+  if (el.dataset.informe) { (ui.informeSec ||= {})[el.dataset.informe] = el.checked; render(); return; }
   if (el.dataset.renombrar) {
     S.proyectos.find((p) => p.id === el.dataset.renombrar).nombre = el.value;
     persistir();
