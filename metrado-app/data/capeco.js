@@ -35,6 +35,8 @@ export const DEFAULTS = {
     alambrePorKg: 0.03, // kg de alambre N°16 por kg de acero
     longitudVarilla: 9,
     desperdicio: 3,
+    despPeso: 10, // % sobre varillas calculadas por peso (método de hoja de cálculo)
+    escalaCAD: 1, // medida leída en CAD ÷ este factor = longitud real
     diametros: {
       '1/4': { nombre: '1/4"', kgm: 0.25, traslape: 0.3, gancho: 0.08, ganchoEstribo: 0.075 },
       '6mm': { nombre: '6 mm', kgm: 0.222, traslape: 0.3, gancho: 0.1, ganchoEstribo: 0.075 },

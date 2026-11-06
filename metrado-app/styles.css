@@ -205,7 +205,7 @@ button, input, select { font: inherit; color: inherit; }
 /* pestañas */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, 1fr);
   background: var(--superficie); border-top: 1px solid var(--linea);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
@@ -213,7 +213,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .tabs button {
   height: var(--tabs); border: 0; background: none; cursor: pointer;
-  font-weight: 600; font-size: 0.85rem; color: var(--tenue); border-top: 3px solid transparent; padding: 0 2px;
+  font-weight: 600; font-size: 0.8rem; color: var(--tenue); border-top: 3px solid transparent; padding: 0 1px;
 }
 .tabs button[aria-current="page"] { color: var(--tinta); border-top-color: var(--acento); }
 
@@ -446,3 +446,34 @@ dialog::backdrop { background: rgb(10 12 11 / 0.55); }
 .guia-cuerpo p, .guia-cuerpo ul { margin: 0; }
 .guia-cuerpo ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .guia-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+
+/* ---------- v4: fórmulas, planilla y vista de computadora ---------- */
+.campo output.expr { font-size: 0.78rem; color: var(--tenue); min-height: 1em; font-variant-numeric: tabular-nums; }
+.campo output.expr:empty { display: none; }
+code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--hundido); padding: 1px 4px; border-radius: 4px; }
+
+.planilla { background: var(--superficie); border: 1px solid var(--linea); border-radius: var(--radio); max-height: 72dvh; overflow: auto; }
+.tabla.pl { font-size: 0.86rem; min-width: 720px; }
+.tabla.pl th, .tabla.pl td { padding: 6px 8px; }
+.tabla.pl thead th { position: sticky; top: 0; z-index: 2; background: var(--superficie); box-shadow: 0 1px 0 var(--linea); }
+.tabla.pl td:first-child, .tabla.pl th:first-child { position: sticky; left: 0; z-index: 1; background: var(--superficie); }
+.tabla.pl thead th:first-child { z-index: 3; }
+.pl-cap td { background: var(--tinta) !important; color: var(--bg); font-weight: 700; letter-spacing: 0.04em; }
+.pl-tipo td { background: var(--hundido) !important; font-weight: 700; }
+.pl-partida td { font-weight: 700; }
+.pl-desc { padding-left: 18px !important; overflow-wrap: anywhere; min-width: 160px; }
+.pl-kg { float: right; font-variant-numeric: tabular-nums; color: var(--tenue); font-weight: 600; }
+.pl-pie td { font-weight: 600; background: var(--hundido); }
+.pl-pie.fuerte td { font-weight: 700; color: var(--tinta); }
+
+@media (min-width: 1000px) {
+  #vista[data-vista="planilla"], #vista[data-vista="resumen"], #vista[data-vista="tablas"] { max-width: 1280px; }
+  .planilla { max-height: none; }
+  body.con-panel .contenido { max-width: none; margin-left: 0; margin-right: calc(min(48vw, 680px) + 8px); }
+  body.con-panel .hoja {
+    position: fixed; inset: 64px 0 var(--tabs) auto; margin: 0; width: min(48vw, 680px); height: auto; max-height: none;
+    border-radius: 0; border-left: 1px solid var(--linea); box-shadow: -8px 0 24px rgb(0 0 0 / 0.12); z-index: 4;
+  }
+  body.con-panel .fab { right: calc(min(48vw, 680px) + 24px); }
+  .tabs { max-width: 1280px; margin: 0 auto; }
+}

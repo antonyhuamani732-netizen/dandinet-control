@@ -179,8 +179,14 @@ export function piezasItem(it, T, planta = {}) {
   if (it.tipo === 'barras') {
     if (it.modo === 'apoyos') return barrasPorApoyos(it, D, T, planta);
     if (it.modo === 'total') {
-      const long = num(it.long);
-      return { piezas: [{ diam: it.diam, long, cant: num(it.cant), uso: it.uso }], info: `${num(it.cant)} × ${long.toFixed(2)} m (longitud total)` };
+      const escala = num(T.acero.escalaCAD) || 1;
+      const desdeCad = it.cad !== undefined && it.cad !== '';
+      const long = desdeCad ? num(it.cad) / escala : num(it.long);
+      return {
+        piezas: [{ diam: it.diam, long, cant: num(it.cant), uso: it.uso }],
+        info: `${num(it.cant)} × ${long.toFixed(2)} m (longitud total)`,
+        desglose: desdeCad ? [`${num(it.cad).toFixed(3)} (CAD) ÷ ${escala} (escala) = ${long.toFixed(3)} m`] : [],
+      };
     }
     const long = num(it.long) + num(it.ganchos) * D.gancho + num(it.traslapes) * D.traslape;
     return { piezas: [{ diam: it.diam, long, cant: num(it.cant), uso: it.uso }], info: `${num(it.cant)} × ${long.toFixed(2)} m` };
@@ -203,17 +209,20 @@ export function piezasItem(it, T, planta = {}) {
     };
   }
   if (it.tipo === 'estribos') {
-    const pos = posicionesEstribos(it.tramos, it.resto, it.long);
-    const long = longitudEstribo(it.b, it.h, it.rec, D.ganchoEstribo);
+    // Cantidad fija (como en una hoja de cálculo) o distribución por tramos.
+    const fija = it.cantFija !== undefined && it.cantFija !== '' && it.cantFija !== null;
+    const pos = fija ? [] : posicionesEstribos(it.tramos, it.resto, it.long);
+    const gancho = it.gancho !== undefined && it.gancho !== '' ? num(it.gancho) : D.ganchoEstribo;
+    const long = longitudEstribo(it.b, it.h, it.rec, gancho);
     if (long <= 0) throw new Error('Estribo: revisa la sección y el recubrimiento');
     // Estribos dentro del nudo (altura de la viga que llega a la columna).
     const nudo = it.nudo?.incluir ? Math.ceil(num(it.nudo.alto ?? 0.4) / (num(it.nudo.sep) || 0.15) - 1e-9) : 0;
-    const cant = pos.length + nudo;
+    const cant = (fija ? num(it.cantFija) : pos.length) + nudo;
     return {
       piezas: [{ diam: it.diam, long, cant, uso: it.uso || 'Estribos' }],
       info: `${cant} estribos de ${long.toFixed(2)} m${nudo ? ` (${nudo} en el nudo)` : ''}`,
       pos, long, cant, nudo,
-      interior: { b: num(it.b) - 2 * num(it.rec), h: num(it.h) - 2 * num(it.rec), gancho: D.ganchoEstribo },
+      interior: { b: num(it.b) - 2 * num(it.rec), h: num(it.h) - 2 * num(it.rec), gancho },
     };
   }
   return { piezas: [], info: '' };

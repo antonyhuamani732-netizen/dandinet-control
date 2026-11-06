@@ -24,6 +24,18 @@ export function contextoAcero(el) {
   };
 }
 
+// Método de hoja de cálculo: REDONDEAR.MAS(kg ÷ peso de una varilla × (1 + %)).
+export function varillasPorPeso(kgPorDiam, T) {
+  const V = num(T.acero.longitudVarilla);
+  const f = 1 + num(T.acero.despPeso) / 100;
+  const out = {};
+  for (const [diam, kg] of Object.entries(kgPorDiam)) {
+    const pesoVarilla = T.acero.diametros[diam].kgm * V;
+    out[diam] = Math.ceil((kg / pesoVarilla) * f - 1e-9);
+  }
+  return out;
+}
+
 // Tablas con el desperdicio propio de la partida, si lo tiene.
 function tablasConDesp(clave, p, T) {
   if (!tieneDesp(p)) return T;
@@ -62,10 +74,13 @@ function calcular(clave, el, p, T0) {
     const kgPorCorte = {};
     for (const [diam, c] of Object.entries(corte)) kgPorCorte[diam] = c.varillas * V * T.acero.diametros[diam].kgm;
     const porCorte = p.modoDesp === 'corte';
+    const porPeso = p.modoDesp === 'peso';
+    const fPeso = 1 + num(T.acero.despPeso) / 100;
+    const varillasPeso = varillasPorPeso(a.kgPorDiam, T);
     const materiales = [];
     let kgCompra = 0;
     for (const [diam, kg] of Object.entries(a.kgPorDiam)) {
-      const q = porCorte ? kgPorCorte[diam] : kg * f;
+      const q = porCorte ? kgPorCorte[diam] : porPeso ? kg * fPeso : kg * f;
       kgCompra += q;
       materiales.push(mat(`acero_${diam}`, `Acero corrugado ${T.acero.diametros[diam].nombre}`, 'kg', q));
     }
@@ -74,7 +89,9 @@ function calcular(clave, el, p, T0) {
     return {
       cantidad: a.kg, und: 'kg', materiales, detalle: '', rendKey: 'acero', armado: a, corte,
       desperdicio: {
-        modo: porCorte ? 'corte' : 'porcentaje',
+        modo: porCorte ? 'corte' : porPeso ? 'peso' : 'porcentaje',
+        varillasPeso,
+        despPeso: num(T.acero.despPeso),
         porcentaje: num(T.acero.desperdicio),
         kgPorcentaje: a.kg * f,
         kgCorte: totalCorte,

@@ -55,8 +55,9 @@ export function estribosVivo(it, T, nElem) {
   const porVarilla = Math.floor(V / r.long + 1e-9);
   const corte = optimizarCorte([{ long: r.long, cant: total }], V, T.acero.diametros[it.diam].traslape);
   const textoDist = [...(it.tramos || []).filter((t) => num(t.n)).map((t) => `${num(t.n)}${sep(t.s)}`), num(it.resto) ? `resto ${sep(it.resto)}` : ''].filter(Boolean).join(', ');
-  return `${figuraDistribucion(r.pos, it.long, fijos)}
-    <p class="nota">Ø${esc(T.acero.diametros[it.diam].nombre)}: ${esc(textoDist || 'sin distribución')} c/extremo → <b>${r.cant} estribos</b> por elemento.</p>
+  const fija = it.cantFija !== undefined && it.cantFija !== '' && it.cantFija !== null;
+  return `${fija ? `<p class="nota">Cantidad fija: <b>${r.cant} estribos</b> por elemento (no usa la distribución).</p>` : `${figuraDistribucion(r.pos, it.long, fijos)}
+    <p class="nota">Ø${esc(T.acero.diametros[it.diam].nombre)}: ${esc(textoDist || 'sin distribución')} c/extremo → <b>${r.cant} estribos</b> por elemento.</p>`}
     <div class="maestro">
       <h5>Para el maestro</h5>
       <div class="maestro-cuerpo">

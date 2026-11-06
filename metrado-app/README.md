@@ -22,6 +22,10 @@ Cada partida se puede **incluir o no**, usar **metrado calculado o valor fijo** 
 - **Confinamiento y empalmes (E.060 / E.070, referencial):** "Distribuir según norma", avisos si la distribución no cumple, estribos dentro del nudo y zonas recomendadas para empalmar (aviso si una barra de más de 9 m empalma fuera de zona).
 - **Desperdicio:** % de Tablas o propio de cada partida; en acero, % fijo sobre kg o real por corte de varillas (se muestran ambos).
 - **Guía** (botón ? arriba): acero corrido, bastones izquierdo/derecho, anclajes, tipos de viga, caso viga chata que llega a viga peraltada, confinamiento, empalmes y desperdicio.
+- **Como en una hoja de cálculo:** los campos numéricos aceptan fórmulas (`25.283/2`, `2.28+0.3*2-2*0.04`); medida en CAD ÷ escala (Tablas); estribos con gancho propio y cantidad fija; varillas **por peso + %** = REDONDEAR.MAS(kg ÷ peso de una varilla × 1.10), junto a las del corte optimizado.
+- **Planilla** (pestaña propia): planilla de metrados CAPECO (Ítem OE · Descripción · Und · N° veces · Largo · Ancho · Alto · Parcial · Total) y planilla de acero con columnas de longitud por diámetro, peso, varillas por peso + % y por corte. Exporta a CSV.
+- **Computadora y celular:** en pantallas anchas el editor queda como panel al costado de la lista y las planillas usan todo el ancho; en el celular sigue como ventana inferior.
+- **Agregar proyecto desde archivo** sin borrar lo que ya tienes.
 - **Varillas de 9 m optimizadas:** el corte agrupa piezas en varillas comerciales (primero el más largo) y parte con traslape las de más de 9 m.
 - **Muros:** ladrillos `1/((L+J)(H+J))`, mortero `e − n·L·A·H`, cemento, arena y agua según mortero 1:3 a 1:6.
 - **Rendimiento:** HH = 8 h × obreros ÷ rendimiento × metrado; días = metrado ÷ (rendimiento × cuadrillas); costo = Σ HH × costo HH.

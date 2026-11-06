@@ -1,6 +1,6 @@
 import { CATEGORIAS } from '../data/capeco.js';
 import { TIPOS } from '../data/elementos.js';
-import { calcElemento } from './elemento.js';
+import { calcElemento, varillasPorPeso } from './elemento.js';
 import { cortePorDiametro } from './corte.js';
 
 export const claveSel = (el, clave) => `${el.id}:${clave}`;
@@ -20,6 +20,7 @@ export function resumen(proyecto, T, sel = {}) {
   const hh = Object.fromEntries(CATEGORIAS.map((c) => [c, 0]));
   const grupos = new Map();
   const piezas = [];
+  const kgPorDiam = {};
   const filas = [];
   let costo = 0;
   let dias = 0;
@@ -37,6 +38,7 @@ export function resumen(proyecto, T, sel = {}) {
       if (r.armado) {
         const f = r.escalaAcero ?? 1;
         for (const p of r.armado.piezas) piezas.push({ ...p, cant: Math.ceil(p.cant * f - 1e-9) });
+        for (const [d, kg] of Object.entries(r.armado.kgPorDiam)) kgPorDiam[d] = (kgPorDiam[d] || 0) + kg * f;
       }
       const gk = `${el.tipo}:${clave}`;
       const g = grupos.get(gk) || {
@@ -56,5 +58,8 @@ export function resumen(proyecto, T, sel = {}) {
     }
   }
   const corte = cortePorDiametro(piezas, T);
-  return { filas, materiales: [...materiales.values()], hh, costo, dias, grupos: [...grupos.values()], corte };
+  return {
+    filas, materiales: [...materiales.values()], hh, costo, dias, grupos: [...grupos.values()], corte,
+    kgPorDiam, varillasPeso: varillasPorPeso(kgPorDiam, T),
+  };
 }

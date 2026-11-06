@@ -256,3 +256,38 @@ test('desperdicio: propio de la partida y real por corte de varillas', () => {
   cerca(m(r, 'acero_1/2'), 2 * 9 * D12.kgm); // 4 piezas de 3 m → 2 varillas
   cerca(r.desperdicio.kgPorcentaje, 12 * D12.kgm * 1.03);
 });
+
+// ---------- v4: método de hoja de cálculo ----------
+import { num as numero, evaluar, esExpresion } from '../calc/util.js';
+import { varillasPorPeso } from '../calc/elemento.js';
+
+test('fórmulas como en Excel', () => {
+  cerca(numero('25.283/2'), 12.6415);
+  cerca(numero('=2.28+0.3*2-2*0.04'), 2.8);
+  cerca(numero('14+8'), 22);
+  cerca(numero('(1,2+0,3)*2'), 3);
+  cerca(numero('0.17*2+0.12*2+2*0.08'), 0.74);
+  assert.equal(numero('abc'), 0);
+  assert.ok(Number.isNaN(evaluar('2+')));
+  assert.equal(esExpresion('12.5'), false);
+  assert.equal(esExpresion('25.283/2'), true);
+});
+
+test('longitud total con medida CAD ÷ escala', () => {
+  const t = structuredClone(DEFAULTS);
+  t.acero.escalaCAD = 2;
+  const r = piezasItem({ tipo: 'barras', modo: 'total', diam: '5/8', cant: 2, long: '', cad: '25.283' }, t);
+  cerca(r.piezas[0].long, 12.6415);
+  cerca(piezasItem({ tipo: 'barras', modo: 'total', diam: '5/8', cant: 2, long: '25.283/2' }, T).piezas[0].long, 12.6415);
+});
+
+test('estribo con gancho propio y cantidad fija (VIGA P. 0.25×0.50, gancho 0.13)', () => {
+  const r = piezasItem({ tipo: 'estribos', diam: '3/8', b: 0.25, h: 0.5, rec: 0.04, gancho: 0.13, cantFija: '84', tramos: [], resto: 0, long: 3 }, T);
+  cerca(r.long, 1.44);
+  assert.equal(r.cant, 84);
+});
+
+test('varillas por peso + 10 % con REDONDEAR.MAS', () => {
+  const v = varillasPorPeso({ '5/8': 687.472, '1/2': 75.501, '3/8': 410.57 }, T);
+  assert.deepEqual(v, { '5/8': 55, '1/2': 10, '3/8': 90 });
+});

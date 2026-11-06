@@ -6,10 +6,11 @@ import { CRITERIOS, confinamiento, distribuirSegunNorma, verificarEstribos, zona
 import { textoPatron } from './calc/corte.js';
 import { resumen, seleccionada, claveSel } from './calc/index.js';
 import { rendimientoRegistro, resumenObra, diasConCuadrilla } from './calc/obra.js';
-import { num } from './calc/util.js';
+import { num, esExpresion } from './calc/util.js';
 import { cargar, guardar, uid, restaurarTablas, importar } from './storage.js';
 import { figuraElemento, figuraMalla, figuraArmado } from './ui/figuras.js';
 import { guiaHTML } from './ui/guia.js';
+import { planillaMetradosHTML, planillaAceroHTML, csvPlanillas } from './ui/planilla.js';
 import { tramosHTML, estribosVivo, PRESETS } from './ui/estribos.js';
 
 const APAREJOS = { soga: 'Soga', cabeza: 'Cabeza', canto: 'Canto' };
@@ -98,10 +99,11 @@ function campo(label, path, valor, opt = {}) {
       .map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(valor) ? ' selected' : ''}>${esc(t)}</option>`).join('');
     return `<label class="campo${opt.ancho ? ' ancho' : ''}" for="${id}"><span>${letra}${esc(label)}</span><select id="${id}" ${datos}>${ops}</select></label>`;
   }
-  const tipo = opt.texto ? 'text' : 'number';
-  const extra = opt.texto ? '' : ' inputmode="decimal" step="any" min="0"';
+  // Los campos numéricos aceptan fórmulas como en Excel (25.283/2); se muestra el resultado.
+  const extra = opt.texto ? '' : ' inputmode="decimal" autocomplete="off" data-num';
   const ph = opt.placeholder != null ? ` placeholder="${esc(opt.placeholder)}"` : '';
-  return `<label class="campo${opt.ancho ? ' ancho' : ''}" for="${id}"><span>${letra}${esc(label)}</span><input id="${id}" type="${tipo}"${extra}${ph} ${datos} value="${esc(valor ?? '')}"></label>`;
+  const res = opt.texto ? '' : `<output class="expr">${esExpresion(valor) ? `= ${fmt(num(valor), 3)}` : ''}</output>`;
+  return `<label class="campo${opt.ancho ? ' ancho' : ''}" for="${id}"><span>${letra}${esc(label)}</span><input id="${id}" type="text"${extra}${ph} ${datos} value="${esc(valor ?? '')}">${res}</label>`;
 }
 
 function check(label, path, valor, rehacer) {
@@ -378,8 +380,8 @@ function desperdicioCampos(c, p) {
   const general = { concreto: T.concreto.desperdicio, acero: T.acero.desperdicio, muro: `${T.desperdicioLadrillo} / ${T.desperdicioMortero}` }[c];
   if (general === undefined) return '';
   return `<div class="rejilla">
-    ${c === 'acero' ? campo('Desperdicio del acero', `partidas.acero.modoDesp`, p.modoDesp || 'porcentaje', { opciones: { porcentaje: '% fijo sobre kg netos', corte: 'Real por corte de varillas' }, rehacer: true }) : ''}
-    ${c !== 'acero' || p.modoDesp !== 'corte' ? campo('Desperdicio % de esta partida', `partidas.${c}.desp`, p.desp ?? '', { placeholder: `Tablas: ${general} %` }) : ''}
+    ${c === 'acero' ? campo('Desperdicio del acero', `partidas.acero.modoDesp`, p.modoDesp || 'porcentaje', { opciones: { porcentaje: '% fijo sobre kg netos', peso: `Por peso + ${S.tablas.acero.despPeso} % (como hoja de cálculo)`, corte: 'Real por corte de varillas' }, rehacer: true }) : ''}
+    ${c !== 'acero' || !p.modoDesp || p.modoDesp === 'porcentaje' ? campo('Desperdicio % de esta partida', `partidas.${c}.desp`, p.desp ?? '', { placeholder: `Tablas: ${general} %` }) : ''}
   </div>`;
 }
 
@@ -441,6 +443,8 @@ function itemAceroHTML(el, it, i, n) {
       ${campo('Sección h (m)', `${base}.h`, it.h)}
       ${campo('Recubrimiento (m)', `${base}.rec`, it.rec)}
       ${campo('Longitud a estribar (m)', `${base}.long`, it.long)}
+      ${campo('Gancho de cada lado (m)', `${base}.gancho`, it.gancho ?? '', { placeholder: `Tablas: ${S.tablas.acero.diametros[it.diam]?.ganchoEstribo ?? ''}` })}
+      ${campo('Cantidad fija (opcional)', `${base}.cantFija`, it.cantFija ?? '', { placeholder: 'Vacío = usa la distribución', rehacer: true })}
     </div>
     ${TIPOS[el.tipo].luz ? `<button type="button" class="secundario chico" data-act="norma-estribos" data-i="${i}">Distribuir según norma (${esc(el.criterio === 'E070' ? 'E.070' : 'E.060')})</button>` : ''}
     <div id="tramos-${i}">${tramosHTML(it, base)}</div>
@@ -481,7 +485,12 @@ function barrasCampos(el, it, base, dia) {
       ${campo('Forma de medir', `${base}.modo`, modo, { opciones: OPC_MODO, rehacer: true, ancho: true })}
       ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
       ${campo('N° de barras', `${base}.cant`, it.cant)}`;
-  if (modo === 'total') return `${h}${campo('Longitud total de corte (m)', `${base}.long`, it.long)}</div>`;
+  if (modo === 'total') {
+    const esc2 = num(S.tablas.acero.escalaCAD) || 1;
+    return `${h}${campo('Longitud total de corte (m)', `${base}.long`, it.long, { placeholder: 'Ej. 12.64 o 25.283/2' })}
+      ${campo(`Medida en CAD (÷ ${esc2})`, `${base}.cad`, it.cad ?? '', { placeholder: 'Opcional' })}</div>
+      <p class="nota">Puedes escribir fórmulas como en Excel: <code>25.283/2</code>. Si llenas la medida en CAD, se divide entre la escala de Tablas (${esc2}) y reemplaza la longitud.</p>`;
+  }
   if (modo === 'simple') {
     return `${h}${campo('Longitud (m)', `${base}.long`, it.long)}
       ${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}
@@ -502,6 +511,12 @@ function barrasCampos(el, it, base, dia) {
 }
 
 function barrasVivo(el, it) {
+  if (it.modo === 'total') {
+    try {
+      const r = piezasItem(it, S.tablas, contextoAcero(el));
+      return r.desglose?.length ? `<ul class="desglose">${r.desglose.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : '';
+    } catch (e) { return `<p class="error">${esc(e.message)}</p>`; }
+  }
   if (it.modo !== 'apoyos') return '';
   let r;
   const ctx = contextoAcero(el);
@@ -648,7 +663,11 @@ function abrirEditor(id, tab) {
   cerrarFlotante();
   $('#hoja-contenido').innerHTML = editorHTML();
   const d = $('#hoja');
-  if (!d.open) d.showModal();
+  // En computadora el editor queda como panel al costado y la lista sigue a la vista.
+  const panel = window.matchMedia('(min-width: 1000px)').matches;
+  document.body.classList.toggle('con-panel', panel);
+  if (d.open && d.matches(':modal') === panel) d.close();
+  if (!d.open) { if (panel) d.show(); else d.showModal(); }
 }
 
 function rehacerTab() {
@@ -696,6 +715,7 @@ function cerrarEditor(guardado = false) {
     render();
   }
   ui.editor = null;
+  document.body.classList.remove('con-panel');
   const d = $('#hoja');
   if (d.open) d.close();
 }
@@ -776,7 +796,7 @@ function vistaResumen() {
   const mats = [...s.materiales].sort((a, b) => orden(a) - orden(b));
   const filasMat = mats.map((m) => {
     const diam = m.clave.startsWith('acero_') ? m.clave.slice(6) : null;
-    return `<tr><td>${esc(m.nombre)}</td><td>${esc(m.und)}</td><td class="n">${cantTxt(m.cantidad, m.und)}</td><td class="n">${diam && s.corte[diam] ? `<b>${s.corte[diam].varillas}</b>` : ''}</td></tr>`;
+    return `<tr><td>${esc(m.nombre)}</td><td>${esc(m.und)}</td><td class="n">${cantTxt(m.cantidad, m.und)}</td><td class="n">${diam && s.corte[diam] ? `<b>${s.corte[diam].varillas}</b>` : ''}</td><td class="n">${diam && s.varillasPeso[diam] ? s.varillasPeso[diam] : ''}</td></tr>`;
   }).join('');
   const hhTot = CATEGORIAS.reduce((a, c) => a + s.hh[c], 0);
   const filasHH = CATEGORIAS.filter((c) => s.hh[c] > 0).map((c) => `<tr><td>${NOMBRE_CATEGORIA[c]}</td><td class="n">${fmt(s.hh[c])}</td><td class="n">${sol(s.hh[c] * num(S.tablas.costoHH[c]))}</td></tr>`).join('');
@@ -801,7 +821,7 @@ function vistaResumen() {
       <div><span>Mano de obra</span><b>${sol(s.costo)}</b><small>${fmt(s.dias, 1)} días · ${fmt(hhTot, 0)} HH</small></div>
     </div>
     <h3>Materiales</h3>
-    ${mats.length ? `<div class="tabla-scroll"><table class="tabla"><thead><tr><th>Material</th><th>Und</th><th class="n">Cantidad</th><th class="n">Varillas ${esc(S.tablas.acero.longitudVarilla)} m</th></tr></thead><tbody>${filasMat}</tbody></table></div>` : '<p class="vacio">Nada seleccionado.</p>'}
+    ${mats.length ? `<div class="tabla-scroll"><table class="tabla"><thead><tr><th>Material</th><th>Und</th><th class="n">Cantidad</th><th class="n">Varillas por corte</th><th class="n">Por peso + ${esc(S.tablas.acero.despPeso)} %</th></tr></thead><tbody>${filasMat}</tbody></table></div>` : '<p class="vacio">Nada seleccionado.</p>'}
     ${Object.keys(s.corte).length ? `<details class="seccion-tabla"><summary>Corte de varillas de lo seleccionado</summary>
       ${Object.entries(s.corte).map(([d, c]) => `<p class="nota"><b>Ø ${esc(D[d].nombre)}: ${c.varillas} varillas</b> (desperdicio ${fmt(c.desperdicio, 1)} %)<br>${c.patrones.map((p) => `${p.veces} × [${esc(textoPatron(p))}]`).join('<br>')}</p>`).join('')}
     </details>` : ''}
@@ -1020,6 +1040,8 @@ function vistaTablas() {
         ${campoTabla('Desperdicio ladrillo de techo %', 'aligerado.desperdicioLadrillo')}
         ${campoTabla('Alambre N°16 por kg de acero', 'acero.alambrePorKg')}
         ${campoTabla('Longitud de varilla (m)', 'acero.longitudVarilla')}
+        ${campoTabla('Acero: % sobre varillas por peso', 'acero.despPeso')}
+        ${campoTabla('Escala CAD (medida ÷ factor)', 'acero.escalaCAD')}
       </div>
     </details>
     <details class="seccion-tabla" open><summary>Costo de hora-hombre (S/)</summary>
@@ -1047,15 +1069,32 @@ function vistaProyectos() {
     <p class="nota">Los datos se guardan solo en este celular. Descarga un respaldo de vez en cuando o para pasarlos a otro equipo.</p>
     <div class="acciones">
       <button type="button" class="secundario" data-act="respaldo">Descargar respaldo</button>
-      <label class="boton secundario" for="importar">Cargar respaldo<input id="importar" type="file" accept=".json,application/json" hidden></label>
+      <label class="boton secundario" for="importar-agregar">Agregar proyecto desde archivo<input id="importar-agregar" type="file" accept=".json,application/json" hidden></label>
+      <label class="boton secundario" for="importar">Reemplazar todo con un respaldo<input id="importar" type="file" accept=".json,application/json" hidden></label>
     </div>`;
 }
 
 // ---------- render ----------
-const VISTAS = { partidas: vistaPartidas, resumen: vistaResumen, obra: vistaObra, tablas: vistaTablas, proyectos: vistaProyectos };
+function vistaPlanilla() {
+  const pr = proyecto();
+  if (!pr) return '<p class="vacio">No hay proyecto seleccionado.</p>';
+  const hoja = ui.planilla || 'metrados';
+  return `<div class="cab-vista"><h2>Planilla · ${esc(pr.nombre)}</h2></div>
+    <div class="barra-acciones">
+      <div class="segmento" role="group" aria-label="Planilla">
+        <button type="button" data-act="planilla" data-v="metrados" aria-pressed="${hoja === 'metrados'}">Metrados</button>
+        <button type="button" data-act="planilla" data-v="acero" aria-pressed="${hoja === 'acero'}">Acero</button>
+      </div>
+      <button type="button" class="secundario chico" data-act="csv-planilla">Exportar a Excel (CSV)</button>
+    </div>
+    ${hoja === 'acero' ? planillaAceroHTML(pr, S.tablas) : planillaMetradosHTML(pr, S.tablas)}`;
+}
+
+const VISTAS = { planilla: vistaPlanilla, partidas: vistaPartidas, resumen: vistaResumen, obra: vistaObra, tablas: vistaTablas, proyectos: vistaProyectos };
 
 function render() {
   const main = $('#vista');
+  main.dataset.vista = vista;
   main.innerHTML = VISTAS[vista]();
   main.querySelectorAll('[data-indet]').forEach((i) => { i.indeterminate = true; });
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.vista === vista ? 'page' : 'false'));
@@ -1260,6 +1299,8 @@ document.addEventListener('click', (ev) => {
       restaurarTablas(S); ui.confirmar = null; persistir(); render(); aviso('Tablas restauradas');
       break;
     case 'csv': exportarCSV(); break;
+    case 'planilla': ui.planilla = ds.v; render(); break;
+    case 'csv-planilla': descargar(`planilla-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csvPlanillas(pr, S.tablas), 'text/csv;charset=utf-8'); break;
     case 'respaldo': descargar(`metrado-respaldo-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S, null, 1), 'application/json'); break;
     default:
   }
@@ -1271,6 +1312,11 @@ $('#hoja').addEventListener('cancel', (ev) => { ev.preventDefault(); cerrarEdito
 
 document.addEventListener('input', (ev) => {
   const el = ev.target;
+  if ('num' in el.dataset) {
+    const out = el.parentElement.querySelector('output.expr');
+    const v = el.value.trim();
+    if (out) out.textContent = esExpresion(v) ? `= ${fmt(num(v), 3)}` : v && !Number.isFinite(Number(v.replace(',', '.'))) ? 'fórmula no válida' : '';
+  }
   const pr = proyecto();
   if (el.dataset.k && ui.editor) {
     const val = 'bool' in el.dataset ? el.checked : el.value;
@@ -1350,9 +1396,28 @@ document.addEventListener('submit', (ev) => {
 });
 
 document.addEventListener('change', async (ev) => {
-  if (ev.target.id !== 'importar') return;
+  if (ev.target.id !== 'importar' && ev.target.id !== 'importar-agregar') return;
   const f = ev.target.files[0];
   if (!f) return;
+  if (ev.target.id === 'importar-agregar') {
+    try {
+      const d = importar(await f.text());
+      for (const p of d.proyectos) {
+        const mapa = {};
+        p.id = uid();
+        p.elementos.forEach((e) => { mapa[e.id] = uid(); e.id = mapa[e.id]; });
+        p.registros.forEach((r) => { r.id = uid(); r.elementoId = mapa[r.elementoId]; });
+        p.seleccion = { excluidos: {}, modo: 'todo' };
+        S.proyectos.push(p);
+        S.actual = p.id;
+      }
+      persistir(); ir('partidas'); aviso(`${d.proyectos.length} proyecto${d.proyectos.length === 1 ? '' : 's'} agregado${d.proyectos.length === 1 ? '' : 's'}`);
+    } catch (e) {
+      aviso(e.message);
+    }
+    ev.target.value = '';
+    return;
+  }
   try {
     const d = importar(await f.text());
     Object.keys(S).forEach((k) => delete S[k]);
