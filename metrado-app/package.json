@@ -1,0 +1,11 @@
+{
+  "name": "metrado-capeco",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA de metrados con materiales y rendimientos CAPECO",
+  "scripts": {
+    "test": "node --test tests/calc.test.mjs",
+    "serve": "npx --yes serve -l 5173 ."
+  }
+}
