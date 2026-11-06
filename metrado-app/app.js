@@ -12,6 +12,7 @@ import { figuraElemento, figuraMalla, figuraArmado } from './ui/figuras.js';
 import { guiaHTML } from './ui/guia.js';
 import { planillaMetradosHTML, planillaAceroHTML, csvPlanillas } from './ui/planilla.js';
 import { informeHTML, informeTexto, seleccionVacia, SECCIONES_INFORME } from './ui/informe.js';
+import { informeAPdf } from './ui/pdf.js';
 import { tramosHTML, estribosVivo, PRESETS } from './ui/estribos.js';
 
 const APAREJOS = { soga: 'Soga', cabeza: 'Cabeza', canto: 'Canto' };
@@ -1099,8 +1100,9 @@ function vistaInforme() {
   return `<div class="inf-barra no-imprimir">
       <button type="button" class="link" data-vista="${ui.vistaPrevia || 'resumen'}">‹ Volver</button>
       <div class="barra-acciones">
-        <button type="button" class="primario chico" data-act="imprimir">Guardar PDF / imprimir</button>
+        <button type="button" class="primario chico" data-act="pdf">Descargar PDF</button>
         <button type="button" class="secundario chico" data-act="compartir">Compartir</button>
+        <button type="button" class="link" data-act="imprimir">Imprimir</button>
       </div>
     </div>
     <div class="inf-opciones no-imprimir">
@@ -1111,22 +1113,66 @@ function vistaInforme() {
     ${seleccionVacia(pr) ? '<p class="vacio">No hay partidas elegidas. Márcalas en Resumen.</p>' : informeHTML(pr, S.tablas, { secciones: sec, elevacion: elevacionHTML })}`;
 }
 
+// Genera el PDF del informe que está en pantalla.
+async function pdfDelInforme() {
+  const nodo = $('#informe');
+  if (!nodo) throw new Error('Abre el informe primero');
+  nodo.querySelectorAll('details').forEach((d) => { d.open = true; });
+  const t = $('#aviso');
+  t.innerHTML = '<span>Preparando PDF…</span>';
+  t.hidden = false;
+  try {
+    const blob = await informeAPdf(nodo, (x) => { t.innerHTML = `<span>Preparando PDF… ${Math.round(x * 100)} %</span>`; });
+    return { blob, nombre: `informe-${proyecto().nombre.replace(/[^\w-]+/g, '_')}.pdf` };
+  } finally {
+    t.hidden = true;
+  }
+}
+
+async function descargarPdf() {
+  let pdf;
+  try { pdf = await pdfDelInforme(); } catch (e) { aviso(`No se pudo crear el PDF: ${e.message}`); return; }
+  // Dentro de la vista previa de Claude se usa su función de descargas.
+  const dl = await window.claude?.use?.('downloads').catch(() => null);
+  if (dl) {
+    try {
+      await dl.save({ filename: pdf.nombre, data: pdf.blob });
+      aviso('PDF guardado');
+    } catch (e) {
+      if (e?.code !== 'declined') aviso('No se pudo guardar aquí. Usa Compartir.');
+    }
+    return;
+  }
+  descargar(pdf.nombre, pdf.blob, 'application/pdf');
+  aviso('PDF descargado');
+}
+
 async function compartirInforme() {
   const pr = proyecto();
   const texto = informeTexto(pr, S.tablas);
   try {
     if (navigator.share) {
-      await navigator.share({ title: `Informe · ${pr.nombre}`, text: texto });
+      // Primero intenta compartir el PDF completo (WhatsApp, Drive, correo…).
+      let archivo = null;
+      if (navigator.canShare) {
+        try {
+          const pdf = await pdfDelInforme();
+          const f = new File([pdf.blob], pdf.nombre, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [f] })) { archivo = f; ui.pdfListo = f; }
+        } catch { /* sigue con el texto */ }
+      }
+      await navigator.share(archivo ? { title: `Informe · ${pr.nombre}`, text: `Informe de metrado · ${pr.nombre}`, files: [archivo] } : { title: `Informe · ${pr.nombre}`, text: texto });
       return;
     }
   } catch (e) {
     if (e?.name === 'AbortError') return;
   }
   abrirFlotante(`<div class="flot-cab"><h3>Compartir informe</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
-    <p class="nota">Copia el resumen o ábrelo en WhatsApp. Para enviar el informe completo, usa "Guardar PDF" y comparte el archivo.</p>
+    <p class="nota">Copia el resumen o ábrelo en WhatsApp. Para enviar el informe completo, usa "Descargar PDF" y comparte el archivo.</p>
     <textarea id="texto-informe" class="texto-compartir" readonly rows="12">${esc(texto)}</textarea>
     <div class="acciones">
       <button type="button" class="primario" data-act="copiar-informe">Copiar texto</button>
+      ${ui.pdfListo ? '<button type="button" class="primario" data-act="compartir-pdf">Compartir el PDF</button>' : ''}
       <a class="boton secundario" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">Abrir en WhatsApp</a>
     </div>`);
 }
@@ -1346,6 +1392,11 @@ document.addEventListener('click', (ev) => {
       window.print();
       break;
     case 'compartir': compartirInforme(); break;
+    case 'pdf': descargarPdf(); break;
+    case 'compartir-pdf':
+      // Un toque nuevo permite abrir el menú de compartir aunque el PDF tardó en crearse.
+      navigator.share?.({ title: ui.pdfListo.name, files: [ui.pdfListo] }).catch(() => {});
+      break;
     case 'copiar-informe': {
       const t = $('#texto-informe');
       navigator.clipboard?.writeText(t.value).then(() => aviso('Texto copiado')).catch(() => { t.select(); aviso('Selecciona y copia el texto'); });

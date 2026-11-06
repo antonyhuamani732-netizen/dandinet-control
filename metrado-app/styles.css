@@ -504,7 +504,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .inf-medidas { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 6px; font-variant-numeric: tabular-nums; }
 .inf-partidas { margin: 0; padding-left: 18px; }
 .inf-elev { margin: 8px 0; }
-.inf-estribo { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr); gap: 4px 14px; align-items: center; margin-top: 10px; padding: 10px; border: 2px solid var(--acento); border-radius: var(--radio); }
+.inf-estribo { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 4px 14px; align-items: center; margin-top: 10px; padding: 10px; border: 2px solid var(--acento); border-radius: var(--radio); }
 .inf-estribo p { margin: 0 0 4px; }
 .inf-dist { grid-column: 1 / -1; }
 @media (max-width: 480px) { .inf-estribo { grid-template-columns: 1fr; } .inf-estribo-fig .figura { max-height: 150px; } }
