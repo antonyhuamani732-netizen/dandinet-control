@@ -17,6 +17,11 @@ Cada partida se puede **incluir o no**, usar **metrado calculado o valor fijo** 
 - **Concreto:** cemento, arena, piedra y agua por f'c 140–280; ciclópeo 1:10+30% PG y 1:8+25% PM; ladrillo de techo en aligerados.
 - **Encofrado:** madera, clavos y alambre N°8, más **puntales, soleras, tablones, estacas, barrotes, tornapuntas y cuñas** según el elemento, con reúsos del juego.
 - **Acero por armado:** barras (con ganchos y traslapes), **mallas en X e Y** (n° = (ancho − 2·rec) ÷ espaciamiento + 1) y **estribos por tramos** con botones +/−, presets y dibujo de la distribución. Tarjeta **Para el maestro**: medida interior, ganchos, longitud de corte, cantidad y varillas.
+- **Barras por apoyos:** longitud = luz + lo que entra en cada extremo según a dónde llega (columna, zapata, viga peraltada, **viga chata con gancho recortado a su peralte**, continúa, traslape, volado o manual). Zonas: corrido, bastón izquierdo, derecho, ambos o central (L/3, L/4… o metros). También **longitud total de corte** directa. Desglose de cada sumando y **elevación del armado** dibujada.
+- **Vigas peraltada, chata y de borde:** sección dibujada y encofrado propio de cada una (descuenta el espesor de losa).
+- **Confinamiento y empalmes (E.060 / E.070, referencial):** "Distribuir según norma", avisos si la distribución no cumple, estribos dentro del nudo y zonas recomendadas para empalmar (aviso si una barra de más de 9 m empalma fuera de zona).
+- **Desperdicio:** % de Tablas o propio de cada partida; en acero, % fijo sobre kg o real por corte de varillas (se muestran ambos).
+- **Guía** (botón ? arriba): acero corrido, bastones izquierdo/derecho, anclajes, tipos de viga, caso viga chata que llega a viga peraltada, confinamiento, empalmes y desperdicio.
 - **Varillas de 9 m optimizadas:** el corte agrupa piezas en varillas comerciales (primero el más largo) y parte con traslape las de más de 9 m.
 - **Muros:** ladrillos `1/((L+J)(H+J))`, mortero `e − n·L·A·H`, cemento, arena y agua según mortero 1:3 a 1:6.
 - **Rendimiento:** HH = 8 h × obreros ÷ rendimiento × metrado; días = metrado ÷ (rendimiento × cuadrillas); costo = Σ HH × costo HH.

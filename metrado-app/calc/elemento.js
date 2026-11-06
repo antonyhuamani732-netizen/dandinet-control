@@ -9,8 +9,33 @@ import { calcRendimiento } from './rendimiento.js';
 import { mat, num } from './util.js';
 
 export const esFijo = (p) => p.fijo !== null && p.fijo !== undefined && p.fijo !== '';
+const tieneDesp = (p) => p.desp !== null && p.desp !== undefined && p.desp !== '';
 
-function calcular(clave, el, p, T) {
+// Medidas que necesita el acero: planta para mallas, luz y sección para bastones y norma.
+export function contextoAcero(el) {
+  const t = TIPOS[el.tipo];
+  const m = medidas(el);
+  return {
+    ...(t.planta ? t.planta(m) : {}),
+    luz: t.luz ? t.luz(m) : undefined,
+    ...(t.seccion ? t.seccion(m) : {}),
+    tipo: el.tipo,
+    criterio: el.criterio || 'E060',
+  };
+}
+
+// Tablas con el desperdicio propio de la partida, si lo tiene.
+function tablasConDesp(clave, p, T) {
+  if (!tieneDesp(p)) return T;
+  const d = num(p.desp);
+  if (clave === 'concreto') return { ...T, concreto: { ...T.concreto, desperdicio: d } };
+  if (clave === 'acero') return { ...T, acero: { ...T.acero, desperdicio: d } };
+  if (clave === 'muro') return { ...T, desperdicioLadrillo: d, desperdicioMortero: d };
+  return T;
+}
+
+function calcular(clave, el, p, T0) {
+  const T = tablasConDesp(clave, p, T0);
   const t = TIPOS[el.tipo];
   const m = medidas(el);
   const n = num(el.n) || 1;
@@ -18,7 +43,7 @@ function calcular(clave, el, p, T) {
     return calcConcreto({ elemento: el.tipo, dims: t.conc(m), n, mezcla: el.mezcla, peralte: el.peralte }, T);
   }
   if (clave === 'encofrado') {
-    const r = calcEncofrado({ elemento: el.tipo, dims: t.enc(m), n }, T);
+    const r = calcEncofrado({ elemento: el.tipo, dims: t.enc(m), n, clase: el.clase }, T);
     const acc = T.accesorios[el.tipo] || {};
     const usos = Math.max(1, num(p.usos) || 1);
     for (const [k, def] of Object.entries(ACCESORIOS)) {
@@ -29,15 +54,34 @@ function calcular(clave, el, p, T) {
     return r;
   }
   if (clave === 'acero') {
-    const a = calcArmado(p.armado, n, T, t.planta ? t.planta(m) : {});
+    const a = calcArmado(p.armado, n, T, contextoAcero(el));
     const corte = cortePorDiametro(a.piezas, T);
     const f = 1 + num(T.acero.desperdicio) / 100;
+    const V = num(T.acero.longitudVarilla);
+    // Dos formas de desperdicio: % fijo sobre kg netos, o lo que se compra según el corte de varillas.
+    const kgPorCorte = {};
+    for (const [diam, c] of Object.entries(corte)) kgPorCorte[diam] = c.varillas * V * T.acero.diametros[diam].kgm;
+    const porCorte = p.modoDesp === 'corte';
     const materiales = [];
+    let kgCompra = 0;
     for (const [diam, kg] of Object.entries(a.kgPorDiam)) {
-      materiales.push(mat(`acero_${diam}`, `Acero corrugado ${T.acero.diametros[diam].nombre}`, 'kg', kg * f));
+      const q = porCorte ? kgPorCorte[diam] : kg * f;
+      kgCompra += q;
+      materiales.push(mat(`acero_${diam}`, `Acero corrugado ${T.acero.diametros[diam].nombre}`, 'kg', q));
     }
     materiales.push(mat('alambre16', 'Alambre negro N°16', 'kg', a.kg * f * num(T.acero.alambrePorKg)));
-    return { cantidad: a.kg, und: 'kg', materiales, detalle: '', rendKey: 'acero', armado: a, corte };
+    const totalCorte = Object.values(kgPorCorte).reduce((x, y) => x + y, 0);
+    return {
+      cantidad: a.kg, und: 'kg', materiales, detalle: '', rendKey: 'acero', armado: a, corte,
+      desperdicio: {
+        modo: porCorte ? 'corte' : 'porcentaje',
+        porcentaje: num(T.acero.desperdicio),
+        kgPorcentaje: a.kg * f,
+        kgCorte: totalCorte,
+        pctCorte: a.kg ? (totalCorte / a.kg - 1) * 100 : 0,
+        kgCompra,
+      },
+    };
   }
   if (clave === 'muro') {
     return calcMuro({ ...p, largo: m.L, alto: m.H, n }, T);

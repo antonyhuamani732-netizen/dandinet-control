@@ -1,13 +1,15 @@
 import { CATEGORIAS, NOMBRE_CATEGORIA, ACCESORIOS } from './data/capeco.js';
-import { ESPECIALIDADES, PARTIDAS, TIPOS, medidas, nuevoElemento } from './data/elementos.js';
-import { calcElemento, calcPartidaElemento, claveRendimiento, esFijo } from './calc/elemento.js';
-import { piezasItem } from './calc/acero.js';
+import { ESPECIALIDADES, PARTIDAS, TIPOS, CLASES_VIGA, medidas, nuevoElemento } from './data/elementos.js';
+import { calcElemento, calcPartidaElemento, claveRendimiento, esFijo, contextoAcero } from './calc/elemento.js';
+import { piezasItem, calcArmado, APOYOS, ZONAS } from './calc/acero.js';
+import { CRITERIOS, confinamiento, distribuirSegunNorma, verificarEstribos, zonasEmpalme, dbDesdeKgm, NOTA_EMPALME } from './calc/norma.js';
 import { textoPatron } from './calc/corte.js';
 import { resumen, seleccionada, claveSel } from './calc/index.js';
 import { rendimientoRegistro, resumenObra, diasConCuadrilla } from './calc/obra.js';
 import { num } from './calc/util.js';
 import { cargar, guardar, uid, restaurarTablas, importar } from './storage.js';
-import { figuraElemento, figuraMalla } from './ui/figuras.js';
+import { figuraElemento, figuraMalla, figuraArmado } from './ui/figuras.js';
+import { guiaHTML } from './ui/guia.js';
 import { tramosHTML, estribosVivo, PRESETS } from './ui/estribos.js';
 
 const APAREJOS = { soga: 'Soga', cabeza: 'Cabeza', canto: 'Canto' };
@@ -46,7 +48,7 @@ function ejemplo() {
     const el = nuevoElemento(tipo, nombre, uid());
     el.n = n;
     Object.assign(el.dims, dims);
-    if (el.partidas.acero) el.partidas.acero.armado = TIPOS[tipo].armado ? TIPOS[tipo].armado(medidas(el)) : [];
+    if (el.partidas.acero) el.partidas.acero.armado = TIPOS[tipo].armado ? TIPOS[tipo].armado(medidas(el), el) : [];
     return Object.assign(el, extra);
   };
   const muro = E('muro', 'Muro eje A', 1, { L: 8, H: 2.6 });
@@ -166,7 +168,9 @@ function despieceHTML(r) {
   const filas = Object.entries(r.corte).map(([diam, c]) => `<tr><td>Ø ${esc(D[diam].nombre)}</td><td class="n">${fmt(r.armado.kgPorDiam[diam])}</td><td class="n"><b>${c.varillas}</b></td><td class="n">${fmt(c.desperdicio, 1)} %</td></tr>
     <tr class="sub"><td colspan="4">${c.patrones.map((p) => `${p.veces} × [${esc(textoPatron(p))}]`).join('<br>')}</td></tr>`).join('');
   if (!filas) return '';
-  return `<h4>Varillas de ${esc(S.tablas.acero.longitudVarilla)} m (corte optimizado)</h4>
+  const d = r.desperdicio;
+  const comp = d ? `<p class="nota">Desperdicio: con ${fmt(d.porcentaje, 1)} % fijo = <b>${fmt(d.kgPorcentaje)} kg</b> · por corte real = <b>${fmt(d.kgCorte)} kg</b> (${fmt(d.pctCorte, 1)} %). Se usa: ${d.modo === 'corte' ? 'corte real' : '% fijo'}.</p>` : '';
+  return `${comp}<h4>Varillas de ${esc(S.tablas.acero.longitudVarilla)} m (corte optimizado)</h4>
     <div class="tabla-scroll"><table class="tabla"><thead><tr><th>Diámetro</th><th class="n">kg netos</th><th class="n">Varillas</th><th class="n">Desp.</th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
 
@@ -315,6 +319,7 @@ function tabMedidas(el) {
   return `<button type="button" class="fig-boton" data-act="zoom" aria-label="Ampliar figura"><span id="fig-el">${figuraElemento(el.tipo, m, el)}</span><span class="lupa">Ampliar</span></button>
     <div class="rejilla">
       ${t.dims.map((x) => campo(`${x.label} (${x.k === 'np' ? 'und' : 'm'})`, `dims.${x.k}`, el.dims[x.k], { letra: x.k })).join('')}
+      ${el.clase !== undefined ? campo('Tipo de viga', 'clase', el.clase, { opciones: CLASES_VIGA, rehacer: true }) : ''}
       ${el.mezcla !== undefined ? campo('Concreto', 'mezcla', el.mezcla, { opciones: opcionesMezcla(el.tipo) }) : ''}
       ${el.peralte !== undefined ? campo('Peralte de losa', 'peralte', el.peralte, { opciones: Object.fromEntries(Object.keys(S.tablas.aligerado).filter((k) => /^\d+$/.test(k)).map((k) => [k, `h = ${k} cm`])), rehacer: true }) : ''}
     </div>
@@ -362,9 +367,20 @@ function tabPartida(el, c) {
       <button type="button" data-act="modo" data-p="${c}" data-v="fijo" aria-pressed="${esFijo(p)}">Valor fijo</button>
     </div>
     ${esFijo(p) ? `<div class="rejilla">${campo(`Metrado fijo (${PARTIDAS[c].und})`, `${base}.fijo`, p.fijo)}</div>` : ''}
+    ${desperdicioCampos(c, p)}
     ${especifico}
     <section class="resultado" id="res-${c}" aria-live="polite">${resultadoPartida(el, c)}</section>
     ${rendimientoCampos(el, c, rt)}`;
+}
+
+function desperdicioCampos(c, p) {
+  const T = S.tablas;
+  const general = { concreto: T.concreto.desperdicio, acero: T.acero.desperdicio, muro: `${T.desperdicioLadrillo} / ${T.desperdicioMortero}` }[c];
+  if (general === undefined) return '';
+  return `<div class="rejilla">
+    ${c === 'acero' ? campo('Desperdicio del acero', `partidas.acero.modoDesp`, p.modoDesp || 'porcentaje', { opciones: { porcentaje: '% fijo sobre kg netos', corte: 'Real por corte de varillas' }, rehacer: true }) : ''}
+    ${c !== 'acero' || p.modoDesp !== 'corte' ? campo('Desperdicio % de esta partida', `partidas.${c}.desp`, p.desp ?? '', { placeholder: `Tablas: ${general} %` }) : ''}
+  </div>`;
 }
 
 function rendimientoCampos(el, c, rt) {
@@ -386,7 +402,11 @@ function aceroHTML(el) {
   const p = el.partidas.acero;
   const n = num(el.n) || 1;
   const items = (p.armado || []).map((it, i) => itemAceroHTML(el, it, i, n)).join('');
-  return `<h4>Armado</h4>
+  const conLuz = TIPOS[el.tipo].luz;
+  return `${conLuz ? `<div class="rejilla">${campo('Criterio de norma', 'criterio', el.criterio || 'E060', { opciones: CRITERIOS, rehacer: true })}</div>
+    <button type="button" class="fig-boton" data-act="zoom-armado" aria-label="Ampliar elevación del armado"><span id="elev">${elevacionHTML(el)}</span><span class="lupa">Ampliar</span></button>` : ''}
+    <div class="barra-acciones"><button type="button" class="link" data-act="guia">Guía: corrido, bastones, anclajes, empalmes</button></div>
+    <h4>Armado</h4>
     <div class="items-acero">${items || '<p class="vacio">Sin armado. Agrega barras, una malla o estribos.</p>'}</div>
     <div class="barra-acciones">
       <button type="button" class="secundario chico" data-act="item-agregar" data-tipo="barras">Barras</button>
@@ -401,13 +421,7 @@ function itemAceroHTML(el, it, i, n) {
   const dia = diametros();
   let campos = '';
   if (it.tipo === 'barras') {
-    campos = `<div class="rejilla">
-      ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
-      ${campo('N° de barras', `${base}.cant`, it.cant)}
-      ${campo('Longitud (m)', `${base}.long`, it.long)}
-      ${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}
-      ${campo('Traslapes por barra', `${base}.traslapes`, it.traslapes)}
-    </div>`;
+    campos = barrasCampos(el, it, base, dia);
   } else if (it.tipo === 'malla') {
     const pl = TIPOS[el.tipo].planta ? TIPOS[el.tipo].planta(medidas(el)) : {};
     campos = `<div class="rejilla">
@@ -428,7 +442,10 @@ function itemAceroHTML(el, it, i, n) {
       ${campo('Recubrimiento (m)', `${base}.rec`, it.rec)}
       ${campo('Longitud a estribar (m)', `${base}.long`, it.long)}
     </div>
-    <div id="tramos-${i}">${tramosHTML(it, base)}</div>`;
+    ${TIPOS[el.tipo].luz ? `<button type="button" class="secundario chico" data-act="norma-estribos" data-i="${i}">Distribuir según norma (${esc(el.criterio === 'E070' ? 'E.070' : 'E.060')})</button>` : ''}
+    <div id="tramos-${i}">${tramosHTML(it, base)}</div>
+    ${el.tipo === 'columna' ? `${check('Estribos en el nudo (dentro de la viga que llega)', `${base}.nudo.incluir`, it.nudo?.incluir, true)}
+      ${it.nudo?.incluir ? `<div class="rejilla">${campo('Peralte de la viga (m)', `${base}.nudo.alto`, it.nudo?.alto ?? 0.4)}${campo('Separación en el nudo (m)', `${base}.nudo.sep`, it.nudo?.sep ?? 0.15)}</div>` : ''}` : ''}`;
   }
   const titulo = { barras: 'Barras', malla: 'Malla', estribos: 'Estribos' }[it.tipo];
   return `<details class="item-acero" open>
@@ -442,21 +459,126 @@ function itemAceroHTML(el, it, i, n) {
   </details>`;
 }
 
+const OPC_FRAC = { 3: 'L/3', 4: 'L/4', 5: 'L/5', 7: 'L/7', 2: 'L/2', m: 'En metros' };
+const OPC_CARA = { sup: 'Superior', inf: 'Inferior', int: 'Intermedia / longitudinal' };
+const OPC_MODO = { apoyos: 'Por apoyos (luz + anclajes)', total: 'Longitud total de corte', simple: 'Longitud + ganchos iguales' };
+
+function extremoCampos(base, lado, ext = {}) {
+  const t = lado === 'izq' ? 'Extremo izquierdo' : 'Extremo derecho';
+  const pth = `${base}.${lado}`;
+  const ap = ext.apoyo || 'columna';
+  return `<fieldset class="extremo"><legend>${t}</legend><div class="rejilla">
+    ${campo('Llega a', `${pth}.apoyo`, ap, { opciones: APOYOS, rehacer: true })}
+    ${['columna', 'zapata', 'viga_peraltada', 'viga_chata', 'placa', 'continua'].includes(ap) ? campo(ap === 'zapata' ? 'Peralte del apoyo (m)' : 'Ancho del apoyo (m)', `${pth}.ancho`, ext.ancho ?? 0.25) : ''}
+    ${ap === 'viga_chata' ? campo('Alto de la viga chata (m)', `${pth}.alto`, ext.alto ?? 0.2) : ''}
+    ${ap === 'manual' ? campo('Anclaje (m)', `${pth}.manual`, ext.manual ?? 0.3) : ''}
+  </div></fieldset>`;
+}
+
+function barrasCampos(el, it, base, dia) {
+  const modo = it.modo || 'simple';
+  let h = `<div class="rejilla">
+      ${campo('Forma de medir', `${base}.modo`, modo, { opciones: OPC_MODO, rehacer: true, ancho: true })}
+      ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
+      ${campo('N° de barras', `${base}.cant`, it.cant)}`;
+  if (modo === 'total') return `${h}${campo('Longitud total de corte (m)', `${base}.long`, it.long)}</div>`;
+  if (modo === 'simple') {
+    return `${h}${campo('Longitud (m)', `${base}.long`, it.long)}
+      ${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}
+      ${campo('Traslapes por barra', `${base}.traslapes`, it.traslapes)}</div>`;
+  }
+  const ctx = contextoAcero(el);
+  const zona = it.zona || 'corrido';
+  h += `${campo('Ubicación', `${base}.cara`, it.cara || 'sup', { opciones: OPC_CARA })}
+      ${campo('Zona', `${base}.zona`, zona, { opciones: ZONAS, rehacer: true })}
+      ${campo('Luz libre (m)', `${base}.luz`, it.luz ?? '', { placeholder: ctx.luz ? `Del elemento: ${fmt(num(ctx.luz))}` : '' })}
+      ${zona !== 'corrido' ? campo('Largo del bastón', `${base}.frac`, it.frac || '3', { opciones: OPC_FRAC, rehacer: true }) : ''}
+      ${zona !== 'corrido' && it.frac === 'm' ? campo('Largo del bastón (m)', `${base}.largo`, it.largo) : ''}
+      ${campo('Recubrimiento (m)', `${base}.rec`, it.rec ?? 0.04)}
+    </div>`;
+  if (zona === 'corrido' || zona === 'izq' || zona === 'ambos') h += extremoCampos(base, 'izq', it.izq);
+  if (zona === 'corrido' || zona === 'der' || zona === 'ambos') h += extremoCampos(base, 'der', it.der);
+  return h;
+}
+
+function barrasVivo(el, it) {
+  if (it.modo !== 'apoyos') return '';
+  let r;
+  const ctx = contextoAcero(el);
+  try { r = piezasItem(it, S.tablas, ctx); } catch (e) { return `<p class="error">${esc(e.message)}</p>`; }
+  const avisos = [...r.avisos];
+  if (r.empalmes.length) {
+    const D = S.tablas.acero.diametros[it.diam];
+    const z = zonasEmpalme(ctx.tipo, ctx.criterio, { ...ctx, luz: r.luz, dbLong: dbDesdeKgm(D.kgm) }, it.cara || 'sup');
+    for (const e of r.empalmes) {
+      const ok = z.zonas.some((x) => e.x0 >= x.x0 - 1e-6 && e.x1 <= x.x1 + 1e-6);
+      avisos.push(ok ? `La barra pasa de ${S.tablas.acero.longitudVarilla} m: el empalme cae entre ${fmt(e.x0)} y ${fmt(e.x1)} m, dentro de la zona recomendada.`
+        : `La barra pasa de ${S.tablas.acero.longitudVarilla} m: el empalme cae entre ${fmt(e.x0)} y ${fmt(e.x1)} m, fuera de la zona recomendada. ${z.texto}`);
+    }
+  }
+  return `<ul class="desglose">${r.desglose.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
+    ${avisos.map((a) => `<p class="aviso-norma">${esc(a)}</p>`).join('')}`;
+}
+
+function geomNorma(el, it) {
+  const ctx = contextoAcero(el);
+  const barras = (el.partidas.acero.armado || []).filter((x) => x.tipo === 'barras');
+  const D = S.tablas.acero.diametros;
+  const dbLong = barras.length ? Math.min(...barras.map((x) => dbDesdeKgm(D[x.diam]?.kgm || 0.994))) : 0.0127;
+  return { ...ctx, b: it.b ?? ctx.b, h: it.h ?? ctx.h, luz: it.long ?? ctx.luz, dbLong, dbEst: dbDesdeKgm(D[it.diam]?.kgm || 0.56) };
+}
+
+function normaEstribosHTML(el, it) {
+  if (!TIPOS[el.tipo].luz) return '';
+  const tipo = el.tipo === 'columna' ? 'columna' : 'viga';
+  const g = geomNorma(el, it);
+  const c = confinamiento(tipo, el.criterio || 'E060', g);
+  const avisos = verificarEstribos(it, c);
+  const emp = zonasEmpalme(tipo, el.criterio || 'E060', g, 'sup');
+  const empInf = tipo === 'viga' ? zonasEmpalme(tipo, el.criterio || 'E060', g, 'inf') : null;
+  return `<div class="norma">
+      <p><b>Confinamiento:</b> zona de ${fmt(c.zona)} m en cada extremo, máx. @${fmt(c.so, 3)} en la zona y @${fmt(c.sMax)} fuera.</p>
+      ${avisos.length ? avisos.map((a) => `<p class="aviso-norma">${esc(a)}</p>`).join('') : '<p class="ok-norma">La distribución cumple el criterio.</p>'}
+      <p><b>Dónde empalmar:</b> ${esc(emp.texto)}${empInf ? ` ${esc(empInf.texto)}` : ''} ${esc(NOTA_EMPALME)}</p>
+      <p class="nota">${esc(c.texto)}</p>
+    </div>`;
+}
+
+function elevacionHTML(el) {
+  const ctx = contextoAcero(el);
+  if (!ctx.luz) return '';
+  let a;
+  try { a = calcArmado(el.partidas.acero.armado, 1, S.tablas, ctx); } catch (e) { return `<p class="error">${esc(e.message)}</p>`; }
+  const tipo = el.tipo === 'columna' ? 'columna' : 'viga';
+  const est = (el.partidas.acero.armado || []).find((x) => x.tipo === 'estribos');
+  const g = geomNorma(el, est || {});
+  const c = confinamiento(tipo, el.criterio || 'E060', g);
+  const emp = tipo === 'columna'
+    ? { int: zonasEmpalme('columna', el.criterio, g, 'int').zonas }
+    : { sup: zonasEmpalme('viga', el.criterio, g, 'sup').zonas, inf: zonasEmpalme('viga', el.criterio, g, 'inf').zonas };
+  const primera = (el.partidas.acero.armado || []).find((x) => x.modo === 'apoyos' && x.zona === 'corrido');
+  const apoyos = tipo === 'columna' ? { izq: 'Abajo', der: 'Arriba' }
+    : { izq: APOYOS[primera?.izq?.apoyo] || 'Apoyo', der: APOYOS[primera?.der?.apoyo] || 'Apoyo' };
+  const leyenda = a.detalle.map((d, i) => (d.it.tipo === 'barras' ? `<li><b>${i + 1}</b> ${esc(d.it.uso || 'Barras')}: ${esc(d.info)}</li>` : '')).join('');
+  return `${figuraArmado(ctx.luz, a.detalle, { zona: c.zona, empalmes: emp, apoyos })}
+    <span class="leyenda-fig"><span class="sw zona"></span>Zona confinada <span class="sw empalme"></span>Zona para empalmar</span>
+    ${leyenda ? `<ol class="leyenda-barras">${leyenda}</ol>` : ''}`;
+}
+
 function infoItem(el, it) {
   try {
-    const pl = TIPOS[el.tipo].planta ? TIPOS[el.tipo].planta(medidas(el)) : {};
-    return piezasItem(it, S.tablas, pl).info;
+    return piezasItem(it, S.tablas, contextoAcero(el)).info;
   } catch (e) {
     return e.message;
   }
 }
 
 function vivoItem(el, it, n) {
-  if (it.tipo === 'estribos') return estribosVivo(it, S.tablas, n);
+  if (it.tipo === 'estribos') return estribosVivo(it, S.tablas, n) + normaEstribosHTML(el, it);
+  if (it.tipo === 'barras') return barrasVivo(el, it);
   if (it.tipo === 'malla') {
     try {
-      const pl = TIPOS[el.tipo].planta ? TIPOS[el.tipo].planta(medidas(el)) : {};
-      const r = piezasItem(it, S.tablas, pl);
+      const r = piezasItem(it, S.tablas, contextoAcero(el));
       return figuraMalla(it.dir, r.cant);
     } catch (e) {
       return `<p class="error">${esc(e.message)}</p>`;
@@ -552,6 +674,8 @@ function refrescarVivo(path) {
   if (res) res.innerHTML = resultadoPartida(el, tab);
   const m = /^partidas\.acero\.armado\.(\d+)\./.exec(path || '');
   if (tab === 'acero') {
+    const elev = $('#elev');
+    if (elev) elev.innerHTML = elevacionHTML(el);
     const n = num(el.n) || 1;
     const idx = m ? [Number(m[1])] : el.partidas.acero.armado.map((_, i) => i);
     for (const i of idx) {
@@ -969,7 +1093,7 @@ function accionEditor(b) {
     }
     case 'item-agregar': el.partidas.acero.armado.push(itemNuevo(ds.tipo, el)); rehacerTab(); return true;
     case 'item-quitar': el.partidas.acero.armado.splice(Number(ds.i), 1); rehacerTab(); return true;
-    case 'armado-tipico': el.partidas.acero.armado = TIPOS[el.tipo].armado(medidas(el)); rehacerTab(); return true;
+    case 'armado-tipico': el.partidas.acero.armado = TIPOS[el.tipo].armado(medidas(el), el); rehacerTab(); return true;
     case 'tramo-n': {
       const v = Math.max(0, num(getPath(el, ds.path)) + Number(ds.d));
       setPath(el, ds.path, v);
@@ -990,6 +1114,15 @@ function accionEditor(b) {
     case 'mat-agregar': (el.partidas.manual.materiales ||= []).push({ nombre: '', und: 'und', porUnidad: 1 }); rehacerTab(); return true;
     case 'mat-quitar': el.partidas.manual.materiales.splice(Number(ds.i), 1); rehacerTab(); return true;
     case 'zoom': abrirFlotante(`<div class="flot-cab"><h3>${esc(TIPOS[el.tipo].nombre)} · ${esc(el.nombre)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>${figuraElemento(el.tipo, medidas(el), el)}<p class="nota">Las letras de la figura son las mismas de los campos de medidas.</p>`, 'grande'); return true;
+    case 'norma-estribos': {
+      const it = el.partidas.acero.armado[Number(ds.i)];
+      const c = confinamiento(el.tipo === 'columna' ? 'columna' : 'viga', el.criterio || 'E060', geomNorma(el, it));
+      Object.assign(it, distribuirSegunNorma(c));
+      refrescarTramos(`partidas.acero.armado.${ds.i}.tramos`);
+      refrescarVivo();
+      return true;
+    }
+    case 'zoom-armado': abrirFlotante(`<div class="flot-cab"><h3>Armado · ${esc(el.nombre)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>${elevacionHTML(el)}`, 'grande'); return true;
     case 'cerrar-editor': cerrarEditor(); return true;
     default: return false;
   }
@@ -1027,6 +1160,7 @@ document.addEventListener('click', (ev) => {
   const pr = proyecto();
   switch (ds.act) {
     case 'selector': abrirFlotante(selectorTipos(), 'grande'); break;
+    case 'guia': abrirFlotante(guiaHTML(S.tablas), 'grande'); break;
     case 'cerrar-flotante': cerrarFlotante(); break;
     case 'desplegar': ui.cerrados.clear(); render(); break;
     case 'contraer':

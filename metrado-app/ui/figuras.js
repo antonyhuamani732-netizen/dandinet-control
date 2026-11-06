@@ -45,7 +45,8 @@ export function figuraElemento(tipo, m, el = {}) {
     case 'columna':
       return caja(40, 120, 28, { ancho: cota('b', m.b), fondo: cota('h', m.h), alto: cota('H', m.H) });
     case 'viga':
-      return caja(180, 40, 24, { ancho: cota('L', m.L), fondo: cota('b', m.b), alto: cota('h', m.h) });
+      return el.clase ? figuraSeccionViga(el.clase, m)
+        : caja(180, 40, 24, { ancho: cota('L', m.L), fondo: cota('b', m.b), alto: cota('h', m.h) });
     case 'placa':
       return caja(120, 110, 14, { ancho: cota('L', m.L), fondo: cota('e', m.e), alto: cota('H', m.H) });
     case 'losa_maciza':
@@ -183,4 +184,99 @@ export function figuraMalla(dir, cant) {
   }
   return svg(`<rect class="fig-cara" x="${x}" y="${y}" width="${W}" height="${H}"/>${lineas}
     ${texto(x + W / 2, y + H + 18, `${cant} barras en ${dir}${cant > 14 ? ' (se dibujan 14)' : ''}`, 'middle', 'fig-nota')}`, '0 0 280 160');
+}
+
+// Sección transversal de la viga con la losa que llega a ella.
+export function figuraSeccionViga(clase, m) {
+  const E = 26; // espesor de losa (px)
+  const y0 = 40;
+  const nombre = { peraltada: 'Viga peraltada: cuelga bajo la losa', chata: 'Viga chata: del mismo espesor que la losa', borde: 'Viga de borde: losa a un solo lado' }[clase] || '';
+  let losa = '';
+  let viga;
+  if (clase === 'chata') {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="280" height="${E}"/>`;
+    viga = { x: 80, w: 120, h: E };
+  } else if (clase === 'borde') {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="170" height="${E}"/>`;
+    viga = { x: 190, w: 56, h: 96 };
+  } else {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="280" height="${E}"/>`;
+    viga = { x: 112, w: 56, h: 96 };
+  }
+  const r = 6;
+  const barras = [0, 1].map((i) => {
+    const x = viga.x + r + 4 + i * (viga.w - 2 * r - 8);
+    return `<circle class="fig-barra" cx="${x}" cy="${y0 + r + 4}" r="3"/><circle class="fig-barra" cx="${x}" cy="${y0 + viga.h - r - 4}" r="3"/>`;
+  }).join('');
+  return svg(`
+    ${losa}
+    <rect class="${clase === 'chata' ? 'fig-tapa fig-chata' : 'fig-lado'}" x="${viga.x}" y="${y0}" width="${viga.w}" height="${viga.h}"/>
+    <rect class="fig-acero fino" x="${viga.x + r}" y="${y0 + r}" width="${viga.w - 2 * r}" height="${viga.h - 2 * r}" rx="3"/>
+    ${barras}
+    <line class="fig-linea" x1="${viga.x}" y1="${y0 + viga.h + 12}" x2="${viga.x + viga.w}" y2="${y0 + viga.h + 12}"/>
+    ${texto(viga.x + viga.w / 2, y0 + viga.h + 26, cota('b', m.b))}
+    <line class="fig-linea" x1="${viga.x + viga.w + 10}" y1="${y0}" x2="${viga.x + viga.w + 10}" y2="${y0 + viga.h}"/>
+    ${texto(viga.x + viga.w + 14, y0 + viga.h / 2 + 4, cota('h', m.h), 'start')}
+    <line class="fig-linea" x1="12" y1="${y0}" x2="12" y2="${y0 + E}"/>
+    ${texto(8, y0 + E / 2 + 4, cota('e', m.e), 'end')}
+    ${texto(140, 18, nombre, 'middle', 'fig-nota')}
+    ${texto(140, y0 + viga.h + 44, `L = ${f2(m.L)} m (luz libre)`, 'middle', 'fig-nota')}`);
+}
+
+// Elevación del armado: apoyos, barras con su zona y ganchos, estribos, zonas de confinamiento y empalme.
+// detalle: salida de calcArmado().detalle; extra = { zona, empalmes: { sup: [], inf: [], int: [] }, apoyos: {izq, der} }
+export function figuraArmado(luz, detalle, extra = {}) {
+  const L = parseFloat(luz) || 0;
+  if (!L) return '';
+  const x0 = 50;
+  const W = 240;
+  const X = (x) => x0 + (x / L) * W;
+  const sc = W / L;
+  const yT = 52;
+  const yB = 112;
+  const largo = (m) => (m > 0 ? Math.max(6, m * sc) : m < 0 ? m * sc : 0);
+  let g = '';
+  // apoyos
+  g += `<rect class="fig-lado" x="${x0 - 22}" y="${yT - 22}" width="22" height="${yB - yT + 44}"/>`;
+  g += `<rect class="fig-lado" x="${x0 + W}" y="${yT - 22}" width="22" height="${yB - yT + 44}"/>`;
+  g += `<rect class="fig-cara" x="${x0}" y="${yT}" width="${W}" height="${yB - yT}"/>`;
+  // zonas de confinamiento
+  const z = Math.min(parseFloat(extra.zona) || 0, L / 2);
+  if (z) {
+    g += `<rect class="fig-zona" x="${x0}" y="${yT}" width="${z * sc}" height="${yB - yT}"/><rect class="fig-zona" x="${X(L - z)}" y="${yT}" width="${z * sc}" height="${yB - yT}"/>`;
+  }
+  // zonas de empalme
+  const bandas = { sup: yT - 12, inf: yB + 4, int: yB + 4 };
+  for (const [cara, zonas] of Object.entries(extra.empalmes || {})) {
+    for (const e of zonas) g += `<rect class="fig-empalme" x="${X(e.x0)}" y="${bandas[cara]}" width="${(e.x1 - e.x0) * sc}" height="8"/>`;
+  }
+  // estribos
+  for (const d of detalle) {
+    if (d.it.tipo === 'estribos' && d.pos) {
+      for (const p of d.pos) if (p <= L) g += `<line class="fig-estribo" x1="${X(p).toFixed(1)}" y1="${yT + 3}" x2="${X(p).toFixed(1)}" y2="${yB - 3}"/>`;
+    }
+  }
+  // barras
+  const cuenta = { sup: 0, inf: 0, int: 0 };
+  detalle.forEach((d, i) => {
+    if (d.it.tipo !== 'barras' || !d.tramos) return;
+    const cara = d.it.cara || 'int';
+    const k = cuenta[cara]++;
+    const y = cara === 'sup' ? yT + 7 + k * 6 : cara === 'inf' ? yB - 7 - k * 6 : (yT + yB) / 2 + k * 6;
+    const dir = cara === 'inf' ? -1 : 1;
+    for (const t of d.tramos) {
+      const xa = X(t.x0) - (t.izq ? largo(t.izq.recto) : 0);
+      const xb = X(t.x1) + (t.der ? largo(t.der.recto) : 0);
+      let path = `M${xa.toFixed(1)},${y}`;
+      if (t.izq?.gancho) path = `M${xa.toFixed(1)},${(y + dir * Math.max(6, t.izq.gancho * sc)).toFixed(1)} L${xa.toFixed(1)},${y}`;
+      path += ` L${xb.toFixed(1)},${y}`;
+      if (t.der?.gancho) path += ` L${xb.toFixed(1)},${(y + dir * Math.max(6, t.der.gancho * sc)).toFixed(1)}`;
+      g += `<path class="fig-acero" d="${path}"/>`;
+      g += `<text x="${((xa + xb) / 2).toFixed(1)}" y="${y - 2}" text-anchor="middle" class="fig-num">${i + 1}</text>`;
+    }
+  });
+  g += texto(x0 - 11, yB + 34, extra.apoyos?.izq || '', 'middle', 'fig-nota');
+  g += texto(x0 + W + 11, yB + 34, extra.apoyos?.der || '', 'middle', 'fig-nota');
+  g += texto(x0 + W / 2, yB + 34, `luz ${f2(L)} m`, 'middle', 'fig-nota');
+  return `<svg class="figura armado" viewBox="0 0 340 160" role="img" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
 }

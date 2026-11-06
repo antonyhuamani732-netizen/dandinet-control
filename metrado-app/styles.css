@@ -415,3 +415,34 @@ dialog::backdrop { background: rgb(10 12 11 / 0.55); }
 .registros { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .registros li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid var(--linea); font-size: 0.9rem; }
 .obra-grupo details > summary { cursor: pointer; font-weight: 600; color: var(--tenue); }
+
+/* ---------- v3: acero por apoyos, norma y guía ---------- */
+.marca > div { flex: 1; min-width: 0; }
+.ayuda { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--acento); background: transparent; color: var(--barra-tinta); font-family: var(--display); font-size: 1.2rem; font-weight: 700; cursor: pointer; }
+.extremo { border: 1px solid var(--linea); border-radius: var(--radio); padding: 8px 10px 10px; margin: 0; min-width: 0; }
+.extremo legend { font-weight: 700; font-size: 0.85rem; padding: 0 4px; color: var(--tenue); text-transform: uppercase; letter-spacing: 0.06em; }
+.desglose { margin: 0; padding: 8px 10px 8px 26px; background: var(--hundido); border-radius: 8px; font-variant-numeric: tabular-nums; font-size: 0.9rem; overflow-wrap: anywhere; }
+.aviso-norma { margin: 0; padding: 8px 10px; border-left: 4px solid var(--medio); background: var(--hundido); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.ok-norma { margin: 0; padding: 8px 10px; border-left: 4px solid var(--bien); background: var(--hundido); border-radius: 0 8px 8px 0; font-size: 0.9rem; }
+.norma { display: flex; flex-direction: column; gap: 8px; }
+.norma p { margin: 0; font-size: 0.92rem; }
+.fig-zona { fill: var(--acento); opacity: 0.18; }
+.fig-empalme { fill: var(--bien); opacity: 0.55; }
+.fig-num { fill: var(--tinta); font: 700 9px var(--texto); }
+.fig-barra { fill: var(--t-acero); }
+.fig-acero.fino { stroke-width: 1.5; }
+.fig-chata { stroke-dasharray: 4 3; }
+.figura.armado { max-height: 240px; }
+.leyenda-fig { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 0.8rem; color: var(--tenue); padding: 4px 4px 0; }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.sw.zona { background: var(--acento); opacity: 0.35; }
+.sw.empalme { background: var(--bien); opacity: 0.7; }
+.leyenda-barras { margin: 6px 0 0; padding-left: 4px; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; text-align: left; font-variant-numeric: tabular-nums; }
+.leyenda-barras b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--t-acero); color: #fff; font-size: 0.72rem; margin-right: 6px; }
+.fig-boton:has(.armado) { cursor: zoom-in; }
+.guia { border: 1px solid var(--linea); border-radius: var(--radio); padding: 0 12px; }
+.guia > summary { cursor: pointer; padding: 12px 0; font-weight: 700; }
+.guia-cuerpo { padding-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.guia-cuerpo p, .guia-cuerpo ul { margin: 0; }
+.guia-cuerpo ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.guia-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }

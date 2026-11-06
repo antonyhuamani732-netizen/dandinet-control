@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { DEFAULTS } from '../data/capeco.js';
 import { nuevoElemento } from '../data/elementos.js';
 import { calcPartidaElemento } from '../calc/elemento.js';
-import { contarEstribos, posicionesEstribos, piezasItem } from '../calc/acero.js';
+import { contarEstribos, posicionesEstribos, piezasItem, anclaje } from '../calc/acero.js';
+import { confinamiento, distribuirSegunNorma, verificarEstribos, zonasEmpalme } from '../calc/norma.js';
+import { areaEncofrado } from '../calc/encofrado.js';
 import { optimizarCorte, partir } from '../calc/corte.js';
 import { porM2 } from '../calc/muros.js';
 import { resumen, claveSel } from '../calc/index.js';
@@ -91,7 +93,7 @@ test('encofrado de viga con accesorios y reúsos', () => {
   const v = el('viga', { n: 2, dims: { b: 0.25, h: 0.5, L: 4 } });
   v.partidas.encofrado.usos = 2;
   const r = calcPartidaElemento(v, 'encofrado', T);
-  const area = (0.25 + 1) * 4 * 2;
+  const area = (0.25 + 2 * (0.5 - 0.2)) * 4 * 2; // peraltada: fondo + 2 × (h − e)
   cerca(r.cantidad, area);
   cerca(m(r, 'acc_puntales'), area * 0.9 / 2);
   cerca(m(r, 'madera'), area * 5.5);
@@ -173,4 +175,84 @@ test('migración de la versión 1', () => {
   cerca(calcPartidaElemento(sc, 'encofrado', T).cantidad, 2 * 8 * 0.3);
   assert.equal(calcPartidaElemento(ac, 'acero', T).armado.detalle[1].cant, 18);
   cerca(calcPartidaElemento(mu, 'muro', T).cantidad, 13);
+});
+
+// ---------- v3 ----------
+const D12 = DEFAULTS.acero.diametros['1/2'];
+
+test('barra por apoyos: llega a viga peraltada y a viga chata', () => {
+  const it = {
+    tipo: 'barras', modo: 'apoyos', zona: 'corrido', diam: '1/2', cant: 2, rec: 0.04, luz: 4,
+    izq: { apoyo: 'viga_peraltada', ancho: 0.25 }, der: { apoyo: 'viga_chata', ancho: 0.3, alto: 0.2 },
+  };
+  const r = piezasItem(it, T, {});
+  // 4 + (0.25 − 0.04) + 0.20 gancho + (0.30 − 0.04) + gancho recortado a 0.20 − 0.08 = 0.12
+  cerca(r.piezas[0].long, 4 + 0.21 + D12.gancho + 0.26 + 0.12);
+  assert.equal(r.avisos.length, 1);
+  assert.match(r.desglose[0], /= 4\.79 m/);
+  assert.equal(anclaje({ apoyo: 'libre' }, D12, 0.04).recto, -0.04);
+});
+
+test('modo total no suma ganchos; bastones en ambos apoyos cuentan doble', () => {
+  const t = piezasItem({ tipo: 'barras', modo: 'total', diam: '1/2', cant: 3, long: 5.2, ganchos: 2 }, T);
+  cerca(t.piezas[0].long, 5.2);
+  const b = piezasItem({ tipo: 'barras', modo: 'apoyos', zona: 'ambos', frac: '3', diam: '5/8', cant: 1, rec: 0.04,
+    izq: { apoyo: 'columna', ancho: 0.25 }, der: { apoyo: 'columna', ancho: 0.25 } }, T, { luz: 4.5 });
+  assert.equal(b.piezas.length, 2);
+  cerca(b.piezas[0].long, 1.5 + 0.21 + DEFAULTS.acero.diametros['5/8'].gancho);
+  assert.equal(b.info.startsWith('2 ×'), true);
+});
+
+test('barras sin modo (datos v2) dan lo mismo que antes', () => {
+  const r = piezasItem({ tipo: 'barras', diam: '1/2', cant: 4, long: 3, ganchos: 1, traslapes: 0 }, T);
+  cerca(r.piezas[0].long, 3.2);
+});
+
+test('encofrado por clase de viga', () => {
+  cerca(areaEncofrado('viga', [0.6, 0.2, 4, 0.2], 'chata'), 0.6 * 4);
+  cerca(areaEncofrado('viga', [0.25, 0.5, 4, 0.2], 'borde'), (0.25 + 0.5 + 0.3) * 4);
+  cerca(areaEncofrado('viga', [0.25, 0.5, 4], undefined), (0.25 + 1) * 4);
+});
+
+test('confinamiento E.060: columna y viga', () => {
+  const c = confinamiento('columna', 'E060', { b: 0.25, h: 0.4, luz: 2.6, dbLong: 0.0127, dbEst: 0.0095 });
+  cerca(c.zona, 0.5);
+  cerca(c.so, 0.1);
+  const v = confinamiento('viga', 'E060', { b: 0.25, h: 0.5, luz: 4, dbLong: 0.0159, dbEst: 0.0095 });
+  cerca(v.zona, 1.0);
+  cerca(v.so, 0.11);
+  const dist = distribuirSegunNorma(v);
+  assert.deepEqual(dist.tramos, [{ n: 1, s: 0.05 }, { n: 10, s: 0.1 }]);
+  assert.equal(dist.resto, 0.2);
+  assert.equal(verificarEstribos({ ...dist }, v).length, 0);
+  assert.ok(verificarEstribos({ tramos: [{ n: 1, s: 0.05 }, { n: 4, s: 0.1 }], resto: 0.25 }, v).length >= 2);
+});
+
+test('estribos en el nudo se suman', () => {
+  const r = piezasItem({ tipo: 'estribos', diam: '3/8', b: 0.25, h: 0.25, rec: 0.04, long: 3,
+    tramos: [{ n: 1, s: 0.05 }, { n: 4, s: 0.1 }], resto: 0.25, nudo: { incluir: true, alto: 0.4, sep: 0.15 } }, T);
+  assert.equal(r.cant, 18 + 3);
+});
+
+test('zonas de empalme: columna, viga superior e inferior', () => {
+  const col = zonasEmpalme('columna', 'E060', { b: 0.25, h: 0.25, luz: 2.8 }, 'int');
+  cerca(col.zonas[0].x0, 0.7);
+  cerca(col.zonas[0].x1, 2.1);
+  const sup = zonasEmpalme('viga', 'E060', { h: 0.4, luz: 6 }, 'sup');
+  cerca(sup.zonas[0].x0, 2);
+  const inf = zonasEmpalme('viga', 'E060', { h: 0.4, luz: 6 }, 'inf');
+  assert.equal(inf.zonas.length, 2);
+  cerca(inf.zonas[0].x0, 0.8);
+});
+
+test('desperdicio: propio de la partida y real por corte de varillas', () => {
+  const z = el('zapata', { dims: { A: 1, B: 1, h: 1 } });
+  z.partidas.concreto.desp = 0;
+  cerca(m(calcPartidaElemento(z, 'concreto', T), 'cemento'), 9.73);
+  const c = el('columna', { dims: { b: 0.25, h: 0.25, H: 3 } });
+  c.partidas.acero.armado = [{ tipo: 'barras', modo: 'total', diam: '1/2', cant: 4, long: 3 }];
+  c.partidas.acero.modoDesp = 'corte';
+  const r = calcPartidaElemento(c, 'acero', T);
+  cerca(m(r, 'acero_1/2'), 2 * 9 * D12.kgm); // 4 piezas de 3 m → 2 varillas
+  cerca(r.desperdicio.kgPorcentaje, 12 * D12.kgm * 1.03);
 });

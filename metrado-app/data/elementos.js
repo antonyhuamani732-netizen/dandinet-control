@@ -45,22 +45,21 @@ export const TIPOS = {
     esp: 'estructuras', nombre: 'Columna', plural: 'Columnas', pref: 'C',
     dims: [d('b', 'Lado b', 0.25), d('h', 'Lado h', 0.25), d('H', 'Altura H', 2.8)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
-    conc: (m) => [m.b, m.h, m.H], enc: (m) => [m.b, m.h, m.H],
+    conc: (m) => [m.b, m.h, m.H], enc: (m) => [m.b, m.h, m.H], criterio: 'E060',
+    luz: (m) => m.H, seccion: (m) => ({ b: m.b, h: m.h }),
     armado: (m) => [
-      { tipo: 'barras', uso: 'Longitudinal', diam: '1/2', cant: 4, long: round2(+m.H + 0.6), ganchos: 1, traslapes: 0 },
+      { tipo: 'barras', uso: 'Longitudinal', modo: 'apoyos', cara: 'int', zona: 'corrido', diam: '1/2', cant: 4, rec: 0.04,
+        izq: { apoyo: 'zapata', ancho: 0.6 }, der: { apoyo: 'traslape' } },
       { tipo: 'estribos', uso: 'Estribos', diam: '3/8', b: m.b, h: m.h, rec: 0.04, long: m.H, tramos: [{ n: 1, s: 0.05 }, { n: 4, s: 0.1 }], resto: 0.25 },
     ],
   },
   viga: {
     esp: 'estructuras', nombre: 'Viga', plural: 'Vigas', pref: 'V',
-    dims: [d('b', 'Base b', 0.25), d('h', 'Peralte h', 0.4), d('L', 'Luz libre L', 4)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
-    conc: (m) => [m.b, m.h, m.L], enc: (m) => [m.b, m.h, m.L],
-    armado: (m) => [
-      { tipo: 'barras', uso: 'Acero superior', diam: '5/8', cant: 2, long: round2(+m.L + 0.6), ganchos: 2, traslapes: 0 },
-      { tipo: 'barras', uso: 'Acero inferior', diam: '5/8', cant: 2, long: round2(+m.L + 0.6), ganchos: 2, traslapes: 0 },
-      { tipo: 'estribos', uso: 'Estribos', diam: '3/8', b: m.b, h: m.h, rec: 0.04, long: m.L, tramos: [{ n: 1, s: 0.05 }, { n: 5, s: 0.1 }], resto: 0.2 },
-    ],
+    dims: [d('b', 'Base b', 0.25), d('h', 'Peralte h', 0.4), d('L', 'Luz libre L', 4), d('e', 'Espesor de losa e', 0.2)],
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', clase: 'peraltada', criterio: 'E060',
+    conc: (m) => [m.b, m.h, m.L], enc: (m) => [m.b, m.h, m.L, m.e],
+    luz: (m) => m.L, seccion: (m) => ({ b: m.b, h: m.h }),
+    armado: (m, el = {}) => armadoViga(m, el.clase),
   },
   placa: {
     esp: 'estructuras', nombre: 'Placa', plural: 'Placas', pref: 'PL',
@@ -119,6 +118,29 @@ export const TIPOS = {
   },
 };
 
+export const CLASES_VIGA = {
+  peraltada: 'Viga peraltada',
+  chata: 'Viga chata',
+  borde: 'Viga de borde',
+};
+
+// Armado típico por clase de viga: corridos superior e inferior, bastones en apoyos y estribos.
+function armadoViga(m, clase = 'peraltada') {
+  const chata = clase === 'chata';
+  const ext = { apoyo: 'columna', ancho: 0.25 };
+  const base = { tipo: 'barras', modo: 'apoyos', rec: 0.04, izq: { ...ext }, der: { ...ext } };
+  const items = [
+    { ...base, uso: 'Acero superior corrido', cara: 'sup', zona: 'corrido', diam: chata ? '1/2' : '5/8', cant: 2 },
+    { ...base, uso: 'Acero inferior corrido', cara: 'inf', zona: 'corrido', diam: chata ? '1/2' : '5/8', cant: 2 },
+  ];
+  if (!chata) items.push({ ...base, uso: 'Bastones superiores en apoyos', cara: 'sup', zona: 'ambos', frac: '3', diam: '5/8', cant: 1 });
+  items.push({
+    tipo: 'estribos', uso: 'Estribos', diam: chata ? '1/4' : '3/8', b: m.b, h: m.h, rec: 0.04, long: m.L,
+    tramos: [{ n: 1, s: 0.05 }, { n: 5, s: 0.1 }], resto: 0.2,
+  });
+  return items;
+}
+
 function round2(x) {
   return Math.round(x * 100) / 100;
 }
@@ -141,13 +163,15 @@ export function nuevoElemento(tipo, nombre, id) {
     partidas: {},
   };
   if (t.mezcla) el.mezcla = t.mezcla;
+  if (t.clase) el.clase = t.clase;
+  if (t.criterio) el.criterio = t.criterio;
   if (t.peralte) el.peralte = t.peralte;
   for (const p of t.partidas) {
     el.partidas[p] = nuevaPartida(p);
     if (t.inactivas?.includes(p)) el.partidas[p].activa = false;
   }
   if (el.partidas.encofrado) el.partidas.encofrado.usos = 1;
-  if (el.partidas.acero) el.partidas.acero.armado = t.armado ? t.armado(medidas(el)) : [];
+  if (el.partidas.acero) el.partidas.acero.armado = t.armado ? t.armado(medidas(el), el) : [];
   if (el.partidas.muro) {
     Object.assign(el.partidas.muro, {
       ladrillo: 'kk18', ladPers: { L: 24, A: 13, H: 9 }, aparejo: 'soga', junta: 1.5, mortero: '1:4', vanos: [],
