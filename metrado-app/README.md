@@ -46,6 +46,17 @@ La app necesita HTTPS. Con GitHub Pages activo en este repositorio (rama `main`)
 
 Los datos viven solo en ese celular: usa **Proyectos → Descargar respaldo** para guardarlos o pasarlos a otro equipo.
 
+## Novedades de la versión 6
+- **Tema oscuro** (por defecto) con un solo botón para pasar a claro; la app recuerda tu elección.
+- **Iconos** en pestañas, tarjetas, partidas y menús; botones **ⓘ** con la explicación y la recomendación de norma de cada dato.
+- **Figuras nuevas**: el acero dibujado dentro de zapatas, columnas, losas, placas y vigas; terreno en cimientos; el muro muestra el aparejo elegido.
+- **Acero ordenado**: recubrimiento **único por partida en cm** con el valor de la E.060 (7.5 cm contra el suelo, 4 cm vigas y columnas, 2 cm losas, placas y escaleras); resumen por diámetro arriba; cada ítem se abre solo (uno a la vez) en 4 pasos: qué es, medidas, apoyos o distribución, resultado.
+- **Ficha de cada diámetro**: mm y pulgadas, kg/m, peso de la varilla, ganchos, traslape, separación libre mínima y para qué se usa.
+- **Calculadora** (botón en la cabecera): libre (fórmulas), acero, concreto, ladrillos y conversiones; "Usar resultado" lo copia al último campo que tocaste.
+- **Guía por partida**: concreto, encofrado, acero (con recubrimientos y diámetros), muros e importar/exportar.
+- **Excel**: plantilla con hoja de instrucciones y ejemplos, importación con vista previa y errores por hoja y fila, y exportación del proyecto en el mismo formato. La librería va dentro de la app (funciona sin internet).
+- En computadora, cambiar de elemento con cambios sin guardar pregunta antes.
+
 ## Usar en la red local con la IP de tu PC
 Sirve para abrir la app en el celular sin subirla a internet (PC y celular en el mismo WiFi).
 
@@ -74,7 +85,8 @@ Al publicar cambios, sube `VERSION` en `sw.js` para que los celulares descarguen
 | `data/elementos.js` | Tipos de elemento, medidas y armado típico |
 | `calc/` | Motor de cálculo puro (sin pantalla), probado en `tests/` |
 | `storage.js` | Guardado local (migra datos de la versión 1); el único archivo a cambiar para pasar a cuentas con suscripción |
-| `app.js`, `ui/`, `index.html`, `styles.css` | Interfaz, figuras y editor de estribos |
+| `app.js`, `ui/`, `index.html`, `styles.css` | Interfaz, figuras, estribos, calculadora, guía, informe, PDF y Excel |
+| `vendor/` | SheetJS 0.18.5 (Apache-2.0) para leer y escribir Excel |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalación y modo sin internet |
 
 ## Siguiente paso: suscripción

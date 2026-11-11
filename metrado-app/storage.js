@@ -26,6 +26,13 @@ function normalizarProyecto(p) {
   p.registros ||= [];
   p.seleccion ||= { excluidos: {}, modo: 'todo' };
   p.seleccion.excluidos ||= {};
+  for (const el of p.elementos) {
+    const a = el.partidas?.acero;
+    if (a && (a.recCm === undefined || a.recCm === '')) {
+      const conRec = (a.armado || []).find((it) => it.rec !== undefined && it.rec !== '');
+      a.recCm = conRec ? Math.round(parseFloat(conRec.rec) * 1000) / 10 : TIPOS[el.tipo]?.rec ?? 4;
+    }
+  }
   return p;
 }
 

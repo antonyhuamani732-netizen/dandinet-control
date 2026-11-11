@@ -103,3 +103,57 @@ export function zonasEmpalme(tipo, criterio, g, cara) {
 }
 
 export const NOTA_EMPALME = 'No empalmes más del 50 % de las barras en la misma sección: alterna los empalmes. Referencial: verifica con los planos y el ingeniero.';
+
+// ---------- recubrimientos E.060 (art. 7.7.1, concreto vaciado en obra) ----------
+export const RECUBRIMIENTOS = [
+  { caso: 'Vaciado contra el suelo y en contacto permanente con él (zapatas, cimientos)', cm: 7.5, tipos: ['zapata', 'cimiento'] },
+  { caso: 'Expuesto al suelo o a la intemperie, barras de 5/8" o menores', cm: 4, tipos: [] },
+  { caso: 'Expuesto al suelo o a la intemperie, barras de 3/4" a 1"', cm: 5, tipos: [] },
+  { caso: 'No expuesto: vigas y columnas (al estribo)', cm: 4, tipos: ['viga', 'columna'] },
+  { caso: 'No expuesto: losas, muros, placas, aligerados y escaleras', cm: 2, tipos: ['losa_maciza', 'losa_aligerada', 'placa', 'escalera'] },
+];
+
+export function recubrimientoRecomendado(tipo) {
+  return RECUBRIMIENTOS.find((r) => r.tipos.includes(tipo)) || RECUBRIMIENTOS[3];
+}
+
+// ---------- ficha de cada diámetro ----------
+const NOMINAL = {
+  '1/4': { mm: 6.35, pulg: '1/4"' }, '6mm': { mm: 6, pulg: '≈ 1/4"' }, '8mm': { mm: 8, pulg: '≈ 5/16"' },
+  '3/8': { mm: 9.53, pulg: '3/8"' }, '12mm': { mm: 12, pulg: '≈ 1/2"' }, '1/2': { mm: 12.7, pulg: '1/2"' },
+  '5/8': { mm: 15.88, pulg: '5/8"' }, '3/4': { mm: 19.05, pulg: '3/4"' }, '1': { mm: 25.4, pulg: '1"' },
+};
+
+const USOS = {
+  '1/4': 'Acero de temperatura en aligerados; estribos de viguetas y vigas chatas pequeñas.',
+  '6mm': 'Estribos de vigas chatas y columnetas; acero de temperatura.',
+  '8mm': 'Estribos de columnetas y vigas chatas; amarres; mallas livianas.',
+  '3/8': 'Estribos de vigas y columnas (con barras longitudinales hasta 1"); mallas de losas macizas y placas; bastones de aligerado.',
+  '12mm': 'Viguetas de aligerado; columnas de confinamiento y vigas soleras; mallas de zapatas pequeñas.',
+  '1/2': 'Viguetas de aligerado; columnas de confinamiento; vigas pequeñas; mallas de zapatas; estribos cuando las barras pasan de 1".',
+  '5/8': 'Acero longitudinal de vigas y columnas; mallas de zapatas.',
+  '3/4': 'Vigas y columnas de mayor carga; zapatas grandes.',
+  '1': 'Columnas y vigas principales de pórticos con mucha carga (estribo mínimo 3/8").',
+};
+
+// tma: tamaño máximo del agregado (m), por defecto 3/4".
+export function fichaDiametro(diam, T, tma = 0.019) {
+  const D = T.acero.diametros[diam];
+  if (!D) return null;
+  const nominal = NOMINAL[diam] || { mm: dbDesdeKgm(D.kgm) * 1000, pulg: D.nombre };
+  const db = nominal.mm / 1000;
+  return {
+    nombre: D.nombre,
+    mm: nominal.mm,
+    pulg: nominal.pulg,
+    kgm: D.kgm,
+    pesoVarilla: D.kgm * num(T.acero.longitudVarilla),
+    gancho90: D.gancho,
+    gancho90Norma: 12 * db,
+    ganchoEstribo: D.ganchoEstribo,
+    ganchoEstriboNorma: Math.max(6 * db, 0.075),
+    traslape: D.traslape,
+    sepLibreMin: Math.max(db, 0.025, 1.33 * tma),
+    uso: USOS[diam] || '',
+  };
+}

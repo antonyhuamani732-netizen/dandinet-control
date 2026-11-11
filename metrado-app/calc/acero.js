@@ -92,7 +92,7 @@ const txtExt = (a, lado) => {
 function barrasPorApoyos(it, D, T, ctx) {
   const luz = num(it.luz) || num(ctx.luz);
   if (!luz) throw new Error('Barras: indica la luz libre');
-  const rec = it.rec ?? 0.04;
+  const rec = ctx.rec ?? it.rec ?? 0.04;
   const largo = it.frac === 'm' ? num(it.largo) : luz / (num(it.frac) || 3);
   const zona = it.zona || 'corrido';
   const cant = num(it.cant);
@@ -194,7 +194,7 @@ export function piezasItem(it, T, planta = {}) {
   if (it.tipo === 'malla') {
     const X = num(it.largoX ?? planta.X);
     const Y = num(it.largoY ?? planta.Y);
-    const rec = num(it.rec);
+    const rec = num(planta.rec ?? it.rec);
     const sep = num(it.sep);
     if (!sep) throw new Error(`Malla ${it.uso || ''}: el espaciamiento debe ser mayor que cero`);
     const [lb, ancho] = it.dir === 'Y' ? [Y, X] : [X, Y];
@@ -209,11 +209,12 @@ export function piezasItem(it, T, planta = {}) {
     };
   }
   if (it.tipo === 'estribos') {
+    const rec = planta.rec ?? it.rec;
     // Cantidad fija (como en una hoja de cálculo) o distribución por tramos.
     const fija = it.cantFija !== undefined && it.cantFija !== '' && it.cantFija !== null;
     const pos = fija ? [] : posicionesEstribos(it.tramos, it.resto, it.long);
     const gancho = it.gancho !== undefined && it.gancho !== '' ? num(it.gancho) : D.ganchoEstribo;
-    const long = longitudEstribo(it.b, it.h, it.rec, gancho);
+    const long = longitudEstribo(it.b, it.h, rec, gancho);
     if (long <= 0) throw new Error('Estribo: revisa la sección y el recubrimiento');
     // Estribos dentro del nudo (altura de la viga que llega a la columna).
     const nudo = it.nudo?.incluir ? Math.ceil(num(it.nudo.alto ?? 0.4) / (num(it.nudo.sep) || 0.15) - 1e-9) : 0;
@@ -222,7 +223,7 @@ export function piezasItem(it, T, planta = {}) {
       piezas: [{ diam: it.diam, long, cant, uso: it.uso || 'Estribos' }],
       info: `${cant} estribos de ${long.toFixed(2)} m${nudo ? ` (${nudo} en el nudo)` : ''}`,
       pos, long, cant, nudo,
-      interior: { b: num(it.b) - 2 * num(it.rec), h: num(it.h) - 2 * num(it.rec), gancho },
+      interior: { b: num(it.b) - 2 * num(rec), h: num(it.h) - 2 * num(rec), gancho },
     };
   }
   return { piezas: [], info: '' };

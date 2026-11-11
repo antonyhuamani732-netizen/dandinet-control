@@ -307,3 +307,60 @@ test('informe: HTML con secciones y texto para compartir', () => {
   assert.match(txt, /\*Pedido de acero\*/);
   assert.match(txt, /varillas de 9 m/);
 });
+
+// ---------- v6: recubrimiento único, ficha de diámetro y Excel ----------
+import vm from 'node:vm';
+import fs from 'node:fs';
+import { fichaDiametro, recubrimientoRecomendado } from '../calc/norma.js';
+import { plantilla, importarLibro, exportarProyecto } from '../ui/excel.js';
+
+const ctxX = {};
+vm.createContext(ctxX);
+vm.runInContext(fs.readFileSync(new URL('../vendor/xlsx.mini.min.js', import.meta.url), 'utf8'), ctxX);
+const XLSX = ctxX.XLSX;
+const ida = (wb) => XLSX.read(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }), { type: 'array' });
+
+test('recubrimiento único por partida en cm manda sobre el de cada ítem', () => {
+  const c = el('columna', { dims: { b: 0.25, h: 0.25, H: 3 } });
+  c.partidas.acero.armado = [{ tipo: 'estribos', diam: '3/8', b: 0.25, h: 0.25, rec: 0.02, long: 3, tramos: [{ n: 1, s: 0.05 }], resto: 0.25 }];
+  c.partidas.acero.recCm = 4;
+  cerca(calcPartidaElemento(c, 'acero', T).armado.detalle[0].long, 0.88);
+  assert.equal(nuevoElemento('zapata', 'Z', 'z').partidas.acero.recCm, 7.5);
+  assert.equal(recubrimientoRecomendado('losa_aligerada').cm, 2);
+});
+
+test('ficha de diámetro: mm, separación mínima y uso', () => {
+  const f = fichaDiametro('5/8', T);
+  cerca(f.mm, 15.88, 0.01);
+  cerca(f.sepLibreMin, 0.02527, 1e-4);
+  assert.match(f.uso, /vigas y columnas/);
+});
+
+test('plantilla Excel → importar sin errores', () => {
+  const { proyecto, errores } = importarLibro(XLSX, ida(plantilla(XLSX, T)), T);
+  assert.deepEqual(errores, []);
+  assert.equal(proyecto.elementos.length, 7);
+  const vp = proyecto.elementos.find((e) => e.nombre === 'VP-101');
+  assert.equal(vp.partidas.acero.armado.length, 3);
+  cerca(calcPartidaElemento(vp, 'acero', T).armado.detalle[0].piezas[0].long, 12.6415);
+  const mu = proyecto.elementos.find((e) => e.tipo === 'muro');
+  cerca(calcPartidaElemento(mu, 'muro', T).cantidad, 8 * 2.6 - 0.9 * 2.1 - 2 * 1.2);
+});
+
+test('exportar → importar da los mismos totales', () => {
+  const { proyecto } = importarLibro(XLSX, ida(plantilla(XLSX, T)), T);
+  const { proyecto: p2, errores } = importarLibro(XLSX, ida(exportarProyecto(XLSX, proyecto, T)), T);
+  assert.deepEqual(errores, []);
+  const a = resumen(proyecto, T);
+  const b = resumen(p2, T);
+  for (const k of Object.keys(a.kgPorDiam)) cerca(b.kgPorDiam[k], a.kgPorDiam[k], 1e-6);
+  cerca(b.materiales.find((m) => m.clave === 'cemento').cantidad, a.materiales.find((m) => m.clave === 'cemento').cantidad);
+});
+
+test('importar Excel informa errores por fila', () => {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Elemento', 'Tipo', 'Cantidad', 'b'], ['X', 'columnaa', 1, 0.2], ['C-2', 'columna', 1, 'abc']]), 'Elementos');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Elemento', 'Tipo de acero', 'Diámetro'], ['NO', 'barras', '1/2']]), 'Acero');
+  const { errores } = importarLibro(XLSX, ida(wb), T);
+  assert.deepEqual(errores.map((e) => `${e.hoja}:${e.fila}`), ['Elementos:2', 'Elementos:3', 'Acero:2']);
+});

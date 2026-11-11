@@ -2,7 +2,9 @@ import { CATEGORIAS, NOMBRE_CATEGORIA, ACCESORIOS } from './data/capeco.js';
 import { ESPECIALIDADES, PARTIDAS, TIPOS, CLASES_VIGA, medidas, nuevoElemento } from './data/elementos.js';
 import { calcElemento, calcPartidaElemento, claveRendimiento, esFijo, contextoAcero } from './calc/elemento.js';
 import { piezasItem, calcArmado, APOYOS, ZONAS } from './calc/acero.js';
-import { CRITERIOS, confinamiento, distribuirSegunNorma, verificarEstribos, zonasEmpalme, dbDesdeKgm, NOTA_EMPALME } from './calc/norma.js';
+import { CRITERIOS, confinamiento, distribuirSegunNorma, verificarEstribos, zonasEmpalme, dbDesdeKgm, NOTA_EMPALME, fichaDiametro, recubrimientoRecomendado } from './calc/norma.js';
+import { icono, ICONO_TIPO } from './ui/iconos.js';
+import { montarCalculadora } from './ui/calculadora.js';
 import { textoPatron } from './calc/corte.js';
 import { resumen, seleccionada, claveSel } from './calc/index.js';
 import { rendimientoRegistro, resumenObra, diasConCuadrilla } from './calc/obra.js';
@@ -13,9 +15,12 @@ import { guiaHTML } from './ui/guia.js';
 import { planillaMetradosHTML, planillaAceroHTML, csvPlanillas } from './ui/planilla.js';
 import { informeHTML, informeTexto, seleccionVacia, SECCIONES_INFORME } from './ui/informe.js';
 import { informeAPdf } from './ui/pdf.js';
+import { plantilla, exportarProyecto, importarLibro } from './ui/excel.js';
 import { tramosHTML, estribosVivo, PRESETS } from './ui/estribos.js';
 
 const APAREJOS = { soga: 'Soga', cabeza: 'Cabeza', canto: 'Canto' };
+const ICONO_PARTIDA = { medidas: 'medida', concreto: 'concreto', encofrado: 'encofrado', acero: 'acero', muro: 'muro', manual: 'manual' };
+
 
 // ---------- utilidades ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -186,18 +191,19 @@ function chipPartida(el, clave, r) {
   const val = r.error ? '<small class="error">Revisar</small>' : p.activa === false ? '<small>No incluida</small>'
     : `<b>${fmt(r.cantidad)} ${esc(r.und)}</b>${r.rendimiento ? `<small>${fmt(r.rendimiento.dias, 1)} d</small>` : ''}`;
   return `<button type="button" class="pchip${estado}" data-editar="${el.id}" data-tab="${clave}">
-    <span class="chip chip-${clave}">${esc(PARTIDAS[clave].nombre)}</span>${val}${esFijo(p) && clave !== 'manual' ? '<span class="sello">Fijo</span>' : ''}${ej}</button>`;
+    <span class="chip chip-${clave}">${icono(ICONO_PARTIDA[clave])}${esc(PARTIDAS[clave].nombre)}</span>${val}${esFijo(p) && clave !== 'manual' ? '<span class="sello">Fijo</span>' : ''}${ej}</button>`;
 }
 
 function tarjetaElemento(el) {
   const res = calcElemento(el, S.tablas);
   return `<article class="tarjeta${el.oculto ? ' oculto' : ''}">
     <div class="tarjeta-cab">
+      <span class="tarjeta-ico t-${el.tipo}">${icono(ICONO_TIPO[el.tipo] || 'manual')}</span>
       <button type="button" class="tarjeta-nombre" data-editar="${el.id}">
         <span class="nombre">${esc(el.nombre)}${num(el.n) > 1 ? ` <span class="veces">× ${num(el.n)}</span>` : ''}${el.oculto ? ' <span class="sello">Oculto</span>' : ''}</span>
         <small>${esc(resumenMedidas(el))}</small>
       </button>
-      <button type="button" class="menu-btn" data-menu="${el.id}" aria-label="Opciones de ${esc(el.nombre)}">⋯</button>
+      <button type="button" class="menu-btn" data-menu="${el.id}" aria-label="Opciones de ${esc(el.nombre)}">${icono('menu')}</button>
     </div>
     <div class="chips-partidas">${Object.keys(el.partidas).map((c) => chipPartida(el, c, res[c])).join('')}</div>
   </article>`;
@@ -242,7 +248,7 @@ function vistaPartidas() {
       const gk = `grp:${tk}`;
       html += `<div class="grupo">
         <button type="button" class="grupo-cab" data-toggle="${gk}" aria-expanded="${abierto(gk)}">
-          <span class="titulo">${esc(t.plural)} <span class="cuenta">(${g.length})</span></span><small>${totalesGrupo(g)}</small><span class="flecha" aria-hidden="true"></span>
+          <span class="titulo">${icono(ICONO_TIPO[tk] || 'manual')} ${esc(t.plural)} <span class="cuenta">(${g.length})</span></span><small>${totalesGrupo(g)}</small><span class="flecha" aria-hidden="true"></span>
         </button>
         <div class="grupo-cuerpo"${abierto(gk) ? '' : ' hidden'}>
           ${g.map(tarjetaElemento).join('')}
@@ -271,12 +277,12 @@ function menuElemento(el) {
   const i = pr.elementos.indexOf(el);
   return `<div class="flot-cab"><h3>${esc(el.nombre)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
     <div class="menu">
-      <button type="button" data-editar="${el.id}">Editar medidas y partidas</button>
-      <button type="button" data-act="duplicar" data-id="${el.id}">Duplicar</button>
-      <button type="button" data-act="ocultar" data-id="${el.id}">${el.oculto ? 'Mostrar (vuelve a sumar)' : 'Ocultar (no suma en el resumen)'}</button>
+      <button type="button" data-editar="${el.id}">${icono('editar')} Editar medidas y partidas</button>
+      <button type="button" data-act="duplicar" data-id="${el.id}">${icono('duplicar')} Duplicar</button>
+      <button type="button" data-act="ocultar" data-id="${el.id}">${icono('ocultar')} ${el.oculto ? 'Mostrar (vuelve a sumar)' : 'Ocultar (no suma en el resumen)'}</button>
       <button type="button" data-act="mover" data-id="${el.id}" data-d="-1"${i === 0 ? ' disabled' : ''}>Subir</button>
       <button type="button" data-act="mover" data-id="${el.id}" data-d="1"${i === pr.elementos.length - 1 ? ' disabled' : ''}>Bajar</button>
-      <button type="button" class="texto-peligro" data-act="borrar-elemento" data-id="${el.id}">Borrar</button>
+      <button type="button" class="texto-peligro" data-act="borrar-elemento" data-id="${el.id}">${icono('borrar')} Borrar</button>
     </div>`;
 }
 
@@ -301,7 +307,7 @@ function editorHTML() {
     </div>
     <nav class="hoja-tabs" role="tablist">${tabsEditor(el).map(([k, n]) => {
       const p = el.partidas[k];
-      return `<button type="button" role="tab" data-tabe="${k}" aria-selected="${k === tab}"${p && p.activa === false ? ' class="apagada"' : ''}>${esc(n)}</button>`;
+      return `<button type="button" role="tab" data-tabe="${k}" aria-selected="${k === tab}"${p && p.activa === false ? ' class="apagada"' : ''}>${icono(ICONO_PARTIDA[k] || 'manual')}<span>${esc(n)}</span></button>`;
     }).join('')}</nav>
     <div class="hoja-cuerpo" id="hoja-tab">${tabHTML(el, tab)}</div>
     <div class="hoja-pie">
@@ -402,65 +408,147 @@ function rendimientoCampos(el, c, rt) {
   </details>`;
 }
 
+// Textos de ayuda de los botones "i".
+const INFO = {
+  rec: ['Recubrimiento', 'Capa de concreto entre la cara del elemento y el acero más cercano (el estribo en vigas y columnas). Se usa uno solo por partida: todas las barras, mallas y estribos de este elemento lo toman. E.060: 7.5 cm contra el suelo; 4 cm vigas y columnas; 2 cm losas, aligerados, placas y escaleras; 4 a 5 cm expuesto a la intemperie.'],
+  diam: ['Diámetro', 'Grosor de la barra. Define el peso por metro, el gancho, el traslape y la separación mínima entre barras. Estribos: 3/8" para barras longitudinales hasta 1"; 1/2" para barras mayores.'],
+  modo: ['Forma de medir', 'Por apoyos: luz libre + lo que entra en cada apoyo (con su gancho). Longitud total: escribes el largo de corte final (puedes poner 25.283/2). Longitud + ganchos: la forma simple, ganchos iguales en ambos extremos.'],
+  zona: ['Zona', 'Corrido: toda la luz. Bastón izquierdo/derecho: refuerzo corto en un apoyo (largo L/3 a L/4 típico). Ambos: un bastón en cada apoyo. Centro: bastón inferior al centro de la luz.'],
+  sep: ['Separación', 'Distancia entre barras de la malla, de centro a centro. N° de barras = (ancho − 2 × recubrimiento) ÷ separación + 1.'],
+  gancho: ['Gancho', 'Doblez al final de la barra para anclarla. 90° en barras (12 db, editable en Tablas); 135° en estribos (6 db, mínimo 7.5 cm).'],
+  traslape: ['Traslape', 'Largo en que dos barras se superponen para continuar. Depende del diámetro (Tablas › Acero). Empalma en la zona permitida y no más del 50 % de las barras en la misma sección.'],
+  dist: ['Distribución de estribos', 'Desde cada extremo: tramos juntos en la zona de confinamiento (p. ej. 1@.05, 4@.10) y el resto más separado al centro. "Distribuir según norma" los calcula con E.060 o E.070.'],
+  desp: ['Desperdicio', '% fijo sobre kg (como CAPECO, 3–5 %), por peso + % (como tu hoja de cálculo) o real por corte de varillas de 9 m (lo que se compra).'],
+};
+const info = (tema) => `<button type="button" class="info-btn" data-act="info" data-tema="${tema}" aria-label="Ayuda: ${esc(INFO[tema]?.[0] || '')}">${icono('info')}</button>`;
+
+function fichaDiametroHTML(diam) {
+  const x = fichaDiametro(diam, S.tablas);
+  if (!x) return '';
+  return `<div class="ficha-d">
+    <div class="ficha-d-cab"><b>Ø ${esc(x.nombre)}</b><span>${fmt(x.mm, 1)} mm · ${esc(x.pulg)}</span></div>
+    <dl>
+      <div><dt>Peso</dt><dd>${fmt(x.kgm, 3)} kg/m</dd></div>
+      <div><dt>Varilla 9 m</dt><dd>${fmt(x.pesoVarilla)} kg</dd></div>
+      <div><dt>Gancho 90°</dt><dd>${fmt(x.gancho90)} m</dd></div>
+      <div><dt>Gancho estribo</dt><dd>${fmt(x.ganchoEstribo)} m</dd></div>
+      <div><dt>Traslape</dt><dd>${fmt(x.traslape)} m</dd></div>
+      <div><dt>Sep. libre mín.</dt><dd>${fmt(x.sepLibreMin * 100, 1)} cm</dd></div>
+    </dl>
+    <p>${icono('ok')} ${esc(x.uso)}</p>
+  </div>`;
+}
+
+function resumenAceroHTML(el) {
+  const r = calcPartidaElemento(el, 'acero', S.tablas);
+  if (r.error || !r.armado) return r.error ? `<p class="error">${esc(r.error)}</p>` : '';
+  const D = S.tablas.acero.diametros;
+  const chips = Object.entries(r.armado.kgPorDiam).map(([d, kg]) => `<div class="kpi-d"><span class="kpi-d-o">Ø ${esc(D[d].nombre)}</span><b>${fmt(kg, 1)} kg</b><small>${r.corte[d]?.varillas ?? 0} varillas</small></div>`).join('');
+  return `<div class="kpi-total"><span>Total acero</span><b>${fmt(r.cantidad, 1)} kg</b></div>${chips}`;
+}
+
 function aceroHTML(el) {
   const p = el.partidas.acero;
   const n = num(el.n) || 1;
   const items = (p.armado || []).map((it, i) => itemAceroHTML(el, it, i, n)).join('');
   const conLuz = TIPOS[el.tipo].luz;
-  return `${conLuz ? `<div class="rejilla">${campo('Criterio de norma', 'criterio', el.criterio || 'E060', { opciones: CRITERIOS, rehacer: true })}</div>
-    <button type="button" class="fig-boton" data-act="zoom-armado" aria-label="Ampliar elevación del armado"><span id="elev">${elevacionHTML(el)}</span><span class="lupa">Ampliar</span></button>` : ''}
-    <div class="barra-acciones"><button type="button" class="link" data-act="guia">Guía: corrido, bastones, anclajes, empalmes</button></div>
-    <h4>Armado</h4>
-    <div class="items-acero">${items || '<p class="vacio">Sin armado. Agrega barras, una malla o estribos.</p>'}</div>
-    <div class="barra-acciones">
-      <button type="button" class="secundario chico" data-act="item-agregar" data-tipo="barras">Barras</button>
-      <button type="button" class="secundario chico" data-act="item-agregar" data-tipo="malla">Malla X / Y</button>
-      <button type="button" class="secundario chico" data-act="item-agregar" data-tipo="estribos">Estribos</button>
-      ${TIPOS[el.tipo].armado ? '<button type="button" class="link" data-act="armado-tipico">Cargar armado típico</button>' : ''}
-    </div>`;
+  const rr = recubrimientoRecomendado(el.tipo);
+  return `<section class="bloque">
+      <div class="bloque-cab">${icono('medida')}<h4>Recubrimiento</h4>${info('rec')}</div>
+      <div class="rec-fila">
+        ${campo('Recubrimiento (cm)', 'partidas.acero.recCm', p.recCm ?? '', { placeholder: `${rr.cm}` })}
+        <button type="button" class="pildora${num(p.recCm) === rr.cm ? ' activa' : ''}" data-act="rec-recomendado" data-v="${rr.cm}">E.060: ${fmt(rr.cm, 1)} cm</button>
+      </div>
+      <p class="nota">Uno solo para todo el acero de este elemento. ${esc(rr.caso)}.</p>
+    </section>
+    <section class="bloque">
+      <div class="bloque-cab">${icono('resumen')}<h4>Resumen del acero</h4></div>
+      <div class="kpis-acero" id="acero-resumen">${resumenAceroHTML(el)}</div>
+    </section>
+    ${conLuz ? `<details class="bloque plegable" open><summary class="bloque-cab">${icono('viga')}<h4>Dibujo del armado</h4></summary>
+      <div class="rejilla">${campo('Criterio de norma', 'criterio', el.criterio || 'E060', { opciones: CRITERIOS, rehacer: true })}</div>
+      <button type="button" class="fig-boton" data-act="zoom-armado" aria-label="Ampliar elevación del armado"><span id="elev">${elevacionHTML(el)}</span><span class="lupa">Ampliar</span></button></details>` : ''}
+    <section class="bloque">
+      <div class="bloque-cab">${icono('acero')}<h4>Armado · ${(p.armado || []).length} ítems</h4><button type="button" class="link" data-act="guia" data-pestana="acero">${icono('guia')} Guía</button></div>
+      <p class="nota">Toca un ítem para editarlo. Se abre uno a la vez.</p>
+      <div class="items-acero">${items || '<p class="vacio">Sin armado. Agrega barras, una malla o estribos.</p>'}</div>
+      <div class="barra-acciones agregar-acero">
+        <button type="button" class="pildora" data-act="item-agregar" data-tipo="barras">${icono('mas')} Barras</button>
+        <button type="button" class="pildora" data-act="item-agregar" data-tipo="malla">${icono('mas')} Malla X / Y</button>
+        <button type="button" class="pildora" data-act="item-agregar" data-tipo="estribos">${icono('mas')} Estribos</button>
+        ${TIPOS[el.tipo].armado ? '<button type="button" class="link" data-act="armado-tipico">Cargar armado típico</button>' : ''}
+      </div>
+    </section>`;
 }
+
+const paso = (n, titulo, html) => (html ? `<li class="paso-item"><div class="paso-cab"><span class="paso-n">${n}</span><h5>${titulo}</h5></div>${html}</li>` : '');
 
 function itemAceroHTML(el, it, i, n) {
   const base = `partidas.acero.armado.${i}`;
   const dia = diametros();
-  let campos = '';
+  const titulo = { barras: 'Barras', malla: 'Malla', estribos: 'Estribos' }[it.tipo];
+  const ico = { barras: 'acero', malla: 'tablas', estribos: 'columna' }[it.tipo];
+  const qué = `<div class="rejilla">
+      ${campo('Descripción', `${base}.uso`, it.uso, { texto: true, ancho: true, placeholder: 'Ej. Acero superior corrido' })}
+      ${it.tipo === 'barras' ? `<div class="campo-info ancho">${campo('Forma de medir', `${base}.modo`, it.modo || 'simple', { opciones: OPC_MODO, rehacer: true, ancho: true })}${info('modo')}</div>` : ''}
+      ${it.tipo === 'barras' && it.modo === 'apoyos' ? `${campo('Ubicación', `${base}.cara`, it.cara || 'sup', { opciones: OPC_CARA })}<div class="campo-info">${campo('Zona', `${base}.zona`, it.zona || 'corrido', { opciones: ZONAS, rehacer: true })}${info('zona')}</div>` : ''}
+      <div class="campo-info">${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia, rehacer: true })}${info('diam')}</div>
+    </div>
+    ${fichaDiametroHTML(it.diam)}`;
+  let medidasH = '';
+  let tres = '';
+  let tresTitulo = '';
   if (it.tipo === 'barras') {
-    campos = barrasCampos(el, it, base, dia);
+    medidasH = barrasMedidas(el, it, base);
+    if (it.modo === 'apoyos') {
+      const zona = it.zona || 'corrido';
+      tresTitulo = 'Dónde llega en cada extremo';
+      if (zona === 'corrido' || zona === 'izq' || zona === 'ambos') tres += extremoCampos(base, 'izq', it.izq);
+      if (zona === 'corrido' || zona === 'der' || zona === 'ambos') tres += extremoCampos(base, 'der', it.der);
+    }
   } else if (it.tipo === 'malla') {
     const pl = TIPOS[el.tipo].planta ? TIPOS[el.tipo].planta(medidas(el)) : {};
-    campos = `<div class="rejilla">
-      ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
+    medidasH = `<div class="rejilla">
       ${campo('Barras paralelas a', `${base}.dir`, it.dir, { opciones: { X: `X (largo ${fmt(num(it.largoX ?? pl.X))} m)`, Y: `Y (ancho ${fmt(num(it.largoY ?? pl.Y))} m)` } })}
-      ${campo('Espaciamiento (m)', `${base}.sep`, it.sep)}
-      ${campo('Recubrimiento (m)', `${base}.rec`, it.rec)}
-      ${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}
+      <div class="campo-info">${campo('Separación (m)', `${base}.sep`, it.sep)}${info('sep')}</div>
+      <div class="campo-info">${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}${info('gancho')}</div>
       ${campo('Capas / caras', `${base}.capas`, it.capas ?? 1)}
       ${pl.X === undefined ? `${campo('Largo X (m)', `${base}.largoX`, it.largoX)}${campo('Ancho Y (m)', `${base}.largoY`, it.largoY)}` : ''}
     </div>
-    <p class="nota">N° barras = (ancho − 2 × recubrimiento) ÷ espaciamiento + 1, en toda la longitud.</p>`;
+    <p class="nota">N° barras = (ancho − 2 × recubrimiento) ÷ separación + 1, en toda la longitud.</p>`;
   } else if (it.tipo === 'estribos') {
-    campos = `<div class="rejilla">
-      ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
+    medidasH = `<div class="rejilla">
       ${campo('Sección b (m)', `${base}.b`, it.b)}
       ${campo('Sección h (m)', `${base}.h`, it.h)}
-      ${campo('Recubrimiento (m)', `${base}.rec`, it.rec)}
       ${campo('Longitud a estribar (m)', `${base}.long`, it.long)}
-      ${campo('Gancho de cada lado (m)', `${base}.gancho`, it.gancho ?? '', { placeholder: `Tablas: ${S.tablas.acero.diametros[it.diam]?.ganchoEstribo ?? ''}` })}
+      <div class="campo-info">${campo('Gancho de cada lado (m)', `${base}.gancho`, it.gancho ?? '', { placeholder: `Tablas: ${S.tablas.acero.diametros[it.diam]?.ganchoEstribo ?? ''}` })}${info('gancho')}</div>
       ${campo('Cantidad fija (opcional)', `${base}.cantFija`, it.cantFija ?? '', { placeholder: 'Vacío = usa la distribución', rehacer: true })}
-    </div>
-    ${TIPOS[el.tipo].luz ? `<button type="button" class="secundario chico" data-act="norma-estribos" data-i="${i}">Distribuir según norma (${esc(el.criterio === 'E070' ? 'E.070' : 'E.060')})</button>` : ''}
-    <div id="tramos-${i}">${tramosHTML(it, base)}</div>
-    ${el.tipo === 'columna' ? `${check('Estribos en el nudo (dentro de la viga que llega)', `${base}.nudo.incluir`, it.nudo?.incluir, true)}
-      ${it.nudo?.incluir ? `<div class="rejilla">${campo('Peralte de la viga (m)', `${base}.nudo.alto`, it.nudo?.alto ?? 0.4)}${campo('Separación en el nudo (m)', `${base}.nudo.sep`, it.nudo?.sep ?? 0.15)}</div>` : ''}` : ''}`;
+    </div>`;
+    tresTitulo = 'Distribución';
+    tres = `<div class="barra-acciones">${TIPOS[el.tipo].luz ? `<button type="button" class="pildora" data-act="norma-estribos" data-i="${i}">${icono('ok')} Distribuir según norma (${esc(el.criterio === 'E070' ? 'E.070' : 'E.060')})</button>` : ''}${info('dist')}</div>
+      <div id="tramos-${i}">${tramosHTML(it, base)}</div>
+      ${el.tipo === 'columna' ? `${check('Estribos en el nudo (dentro de la viga que llega)', `${base}.nudo.incluir`, it.nudo?.incluir, true)}
+        ${it.nudo?.incluir ? `<div class="rejilla">${campo('Peralte de la viga (m)', `${base}.nudo.alto`, it.nudo?.alto ?? 0.4)}${campo('Separación en el nudo (m)', `${base}.nudo.sep`, it.nudo?.sep ?? 0.15)}</div>` : ''}` : ''}`;
   }
-  const titulo = { barras: 'Barras', malla: 'Malla', estribos: 'Estribos' }[it.tipo];
-  return `<details class="item-acero" open>
-    <summary><span class="chip chip-acero">${titulo}</span><span class="item-uso">${esc(it.uso || titulo)}</span><span class="item-info" id="info-${i}">${esc(infoItem(el, it))}</span></summary>
+  const abierto = ui.itemAbierto === i;
+  return `<details class="item-acero" data-i="${i}"${abierto ? ' open' : ''}>
+    <summary>
+      <span class="item-ico">${icono(ico)}</span>
+      <span class="item-txt"><span class="item-uso">${esc(it.uso || titulo)}</span><span class="item-info" id="info-${i}">${esc(infoItem(el, it))}</span></span>
+      <span class="item-d">Ø ${esc(S.tablas.acero.diametros[it.diam]?.nombre || '')}</span>
+      <span class="item-flecha">${icono('flecha')}</span>
+    </summary>
     <div class="item-cuerpo">
-      <div class="rejilla">${campo('Descripción', `${base}.uso`, it.uso, { texto: true, ancho: true })}</div>
-      ${campos}
-      <div class="vivo" id="vivo-${i}">${vivoItem(el, it, n)}</div>
-      <button type="button" class="quitar" data-act="item-quitar" data-i="${i}">Quitar ${titulo.toLowerCase()}</button>
+      <ol class="pasos">
+        ${paso(1, 'Qué es', qué)}
+        ${paso(2, 'Medidas', medidasH)}
+        ${paso(3, tresTitulo, tres)}
+        ${paso(tres ? 4 : 3, 'Resultado', `<div class="vivo" id="vivo-${i}">${vivoItem(el, it, n)}</div>`)}
+      </ol>
+      <div class="barra-acciones">
+        <button type="button" class="link" data-act="item-duplicar" data-i="${i}">${icono('duplicar')} Duplicar</button>
+        <button type="button" class="quitar" data-act="item-quitar" data-i="${i}">${icono('borrar')} Quitar</button>
+      </div>
     </div>
   </details>`;
 }
@@ -481,35 +569,27 @@ function extremoCampos(base, lado, ext = {}) {
   </div></fieldset>`;
 }
 
-function barrasCampos(el, it, base, dia) {
+function barrasMedidas(el, it, base) {
   const modo = it.modo || 'simple';
-  let h = `<div class="rejilla">
-      ${campo('Forma de medir', `${base}.modo`, modo, { opciones: OPC_MODO, rehacer: true, ancho: true })}
-      ${campo('Diámetro', `${base}.diam`, it.diam, { opciones: dia })}
-      ${campo('N° de barras', `${base}.cant`, it.cant)}`;
+  const cant = campo('N° de barras', `${base}.cant`, it.cant);
   if (modo === 'total') {
-    const esc2 = num(S.tablas.acero.escalaCAD) || 1;
-    return `${h}${campo('Longitud total de corte (m)', `${base}.long`, it.long, { placeholder: 'Ej. 12.64 o 25.283/2' })}
-      ${campo(`Medida en CAD (÷ ${esc2})`, `${base}.cad`, it.cad ?? '', { placeholder: 'Opcional' })}</div>
-      <p class="nota">Puedes escribir fórmulas como en Excel: <code>25.283/2</code>. Si llenas la medida en CAD, se divide entre la escala de Tablas (${esc2}) y reemplaza la longitud.</p>`;
+    const e = num(S.tablas.acero.escalaCAD) || 1;
+    return `<div class="rejilla">${cant}${campo('Longitud total de corte (m)', `${base}.long`, it.long, { placeholder: 'Ej. 12.64 o 25.283/2' })}
+      ${campo(`Medida en CAD (÷ ${e})`, `${base}.cad`, it.cad ?? '', { placeholder: 'Opcional' })}</div>
+      <p class="nota">Puedes escribir fórmulas como en Excel: <code>25.283/2</code>.</p>`;
   }
   if (modo === 'simple') {
-    return `${h}${campo('Longitud (m)', `${base}.long`, it.long)}
-      ${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}
-      ${campo('Traslapes por barra', `${base}.traslapes`, it.traslapes)}</div>`;
+    return `<div class="rejilla">${cant}${campo('Longitud (m)', `${base}.long`, it.long)}
+      <div class="campo-info">${campo('Ganchos', `${base}.ganchos`, it.ganchos, { opciones: { 0: 'Sin gancho', 1: '1 gancho', 2: '2 ganchos' } })}${info('gancho')}</div>
+      <div class="campo-info">${campo('Traslapes por barra', `${base}.traslapes`, it.traslapes)}${info('traslape')}</div></div>`;
   }
   const ctx = contextoAcero(el);
   const zona = it.zona || 'corrido';
-  h += `${campo('Ubicación', `${base}.cara`, it.cara || 'sup', { opciones: OPC_CARA })}
-      ${campo('Zona', `${base}.zona`, zona, { opciones: ZONAS, rehacer: true })}
+  return `<div class="rejilla">${cant}
       ${campo('Luz libre (m)', `${base}.luz`, it.luz ?? '', { placeholder: ctx.luz ? `Del elemento: ${fmt(num(ctx.luz))}` : '' })}
       ${zona !== 'corrido' ? campo('Largo del bastón', `${base}.frac`, it.frac || '3', { opciones: OPC_FRAC, rehacer: true }) : ''}
       ${zona !== 'corrido' && it.frac === 'm' ? campo('Largo del bastón (m)', `${base}.largo`, it.largo) : ''}
-      ${campo('Recubrimiento (m)', `${base}.rec`, it.rec ?? 0.04)}
     </div>`;
-  if (zona === 'corrido' || zona === 'izq' || zona === 'ambos') h += extremoCampos(base, 'izq', it.izq);
-  if (zona === 'corrido' || zona === 'der' || zona === 'ambos') h += extremoCampos(base, 'der', it.der);
-  return h;
 }
 
 function barrasVivo(el, it) {
@@ -656,9 +736,27 @@ function manualHTML(el) {
     <section class="resultado" id="res-manual" aria-live="polite">${resultadoPartida(el, 'manual')}</section>`;
 }
 
-function abrirEditor(id, tab) {
+function hayCambios() {
+  if (!ui.editor) return false;
+  const original = proyecto().elementos.find((e) => e.id === ui.editor.id);
+  return !original || JSON.stringify(original) !== JSON.stringify(ui.editor.draft);
+}
+
+function abrirEditor(id, tab, forzar = false) {
   const el = proyecto().elementos.find((e) => e.id === id);
   if (!el) return;
+  // En el panel de computadora, no perder cambios al pasar a otro elemento.
+  if (!forzar && ui.editor && ui.editor.id !== id && hayCambios()) {
+    ui.pendienteAbrir = { id, tab };
+    abrirFlotante(`<div class="flot-cab"><h3>${icono('aviso')} Cambios sin guardar</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">${icono('cerrar')}</button></div>
+      <p>${esc(ui.editor.draft.nombre)} tiene cambios sin guardar.</p>
+      <div class="acciones">
+        <button type="button" class="primario" data-act="pendiente-guardar">Guardar y abrir ${esc(el.nombre)}</button>
+        <button type="button" class="secundario" data-act="pendiente-descartar">Descartar cambios</button>
+        <button type="button" class="link" data-act="cerrar-flotante">Seguir editando</button>
+      </div>`, 'menu-flot');
+    return;
+  }
   const draft = structuredClone(el);
   const tabs = tabsEditor(draft).map(([k]) => k);
   ui.editor = { draft, tab: tabs.includes(tab) ? tab : tabs[0], id };
@@ -695,6 +793,8 @@ function refrescarVivo(path) {
   if (res) res.innerHTML = resultadoPartida(el, tab);
   const m = /^partidas\.acero\.armado\.(\d+)\./.exec(path || '');
   if (tab === 'acero') {
+    const res2 = $('#acero-resumen');
+    if (res2) res2.innerHTML = resumenAceroHTML(el);
     const elev = $('#elev');
     if (elev) elev.innerHTML = elevacionHTML(el);
     const n = num(el.n) || 1;
@@ -1084,13 +1184,25 @@ function vistaProyectos() {
   return `<div class="cab-vista"><h2>Proyectos</h2></div>
     ${avisoRedLocal()}
     <ul class="lista-proyectos">${items}</ul>
-    <div class="acciones"><button type="button" class="primario" data-act="nuevo-proyecto">Nuevo proyecto</button></div>
-    <h3>Respaldo</h3>
-    <p class="nota">Los datos se guardan solo en este celular. Descarga un respaldo de vez en cuando o para pasarlos a otro equipo.</p>
-    <div class="acciones">
-      <button type="button" class="secundario" data-act="respaldo">Descargar respaldo</button>
-      <label class="boton secundario" for="importar-agregar">Agregar proyecto desde archivo<input id="importar-agregar" type="file" accept=".json,application/json" hidden></label>
-      <label class="boton secundario" for="importar">Reemplazar todo con un respaldo<input id="importar" type="file" accept=".json,application/json" hidden></label>
+    <div class="acciones"><button type="button" class="primario" data-act="nuevo-proyecto">${icono('mas')} Nuevo proyecto</button></div>
+    <h3>${icono('exportar')} Datos</h3>
+    <p class="nota">Los datos se guardan solo en este equipo. Exporta para trabajar en Excel, pasar tus proyectos a otro equipo o tener un respaldo.</p>
+    <div class="datos-grid">
+      <div class="dato-card">
+        <div class="dato-cab">${icono('excel')}<h4>Excel</h4></div>
+        <p class="nota">Llena la plantilla en la PC (trae instrucciones y ejemplos) e impórtala. También puedes exportar tu proyecto y volver a importarlo corregido.</p>
+        <button type="button" class="pildora" data-act="xlsx-plantilla">${icono('importar')} Descargar plantilla</button>
+        <label class="pildora boton" for="importar-excel">${icono('exportar')} Importar Excel<input id="importar-excel" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label>
+        <button type="button" class="pildora" data-act="xlsx-exportar">${icono('importar')} Exportar proyecto a Excel</button>
+        <button type="button" class="link" data-act="guia" data-pestana="importar">${icono('guia')} Cómo llenar la plantilla</button>
+      </div>
+      <div class="dato-card">
+        <div class="dato-cab">${icono('proyectos')}<h4>Respaldo completo</h4></div>
+        <p class="nota">Todos los proyectos, tablas y registros de obra en un archivo .json.</p>
+        <button type="button" class="pildora" data-act="respaldo">${icono('importar')} Descargar respaldo</button>
+        <label class="pildora boton" for="importar-agregar">${icono('exportar')} Agregar proyecto desde archivo<input id="importar-agregar" type="file" accept=".json,application/json" hidden></label>
+        <label class="pildora boton peligro-suave" for="importar">${icono('aviso')} Reemplazar todo con un respaldo<input id="importar" type="file" accept=".json,application/json" hidden></label>
+      </div>
     </div>`;
 }
 
@@ -1147,22 +1259,85 @@ async function pdfDelInforme() {
   }
 }
 
-async function descargarPdf() {
-  let pdf;
-  try { pdf = await pdfDelInforme(); } catch (e) { aviso(`No se pudo crear el PDF: ${e.message}`); return; }
-  // Dentro de la vista previa de Claude se usa su función de descargas.
+// Guarda un archivo: en la vista previa de Claude con su función de descargas; si no, descarga normal.
+async function guardarArchivo(nombre, datos, tipo) {
+  const blob = datos instanceof Blob ? datos : new Blob([datos], { type: tipo });
   const dl = await window.claude?.use?.('downloads').catch(() => null);
   if (dl) {
     try {
-      await dl.save({ filename: pdf.nombre, data: pdf.blob });
-      aviso('PDF guardado');
+      await dl.save({ filename: nombre, data: blob });
+      aviso(`${nombre} guardado`);
     } catch (e) {
-      if (e?.code !== 'declined') aviso('No se pudo guardar aquí. Usa Compartir.');
+      if (e?.code !== 'declined') aviso('No se pudo guardar aquí.');
     }
     return;
   }
-  descargar(pdf.nombre, pdf.blob, 'application/pdf');
-  aviso('PDF descargado');
+  descargar(nombre, blob, tipo);
+  aviso(`${nombre} descargado`);
+}
+
+// La librería de Excel se carga solo cuando se usa (va dentro de la app, funciona sin internet).
+let promesaXLSX = null;
+function cargarXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  promesaXLSX ||= new Promise((ok, mal) => {
+    const sc = document.createElement('script');
+    sc.src = './vendor/xlsx.mini.min.js';
+    sc.onload = () => (window.XLSX ? ok(window.XLSX) : mal(new Error('No se cargó la librería de Excel')));
+    sc.onerror = () => { promesaXLSX = null; mal(new Error('No se pudo cargar la librería de Excel')); };
+    document.head.append(sc);
+  });
+  return promesaXLSX;
+}
+
+const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const nombreArchivo = (t) => t.replace(/[^\w-]+/g, '_');
+
+async function excelPlantilla() {
+  try {
+    const X = await cargarXLSX();
+    const buf = X.write(plantilla(X, S.tablas), { type: 'array', bookType: 'xlsx' });
+    await guardarArchivo('plantilla-metrado-capeco.xlsx', new Blob([buf], { type: MIME_XLSX }), MIME_XLSX);
+  } catch (e) { aviso(e.message); }
+}
+
+async function excelExportar() {
+  try {
+    const X = await cargarXLSX();
+    const pr = proyecto();
+    const buf = X.write(exportarProyecto(X, pr, S.tablas), { type: 'array', bookType: 'xlsx' });
+    await guardarArchivo(`metrado-${nombreArchivo(pr.nombre)}.xlsx`, new Blob([buf], { type: MIME_XLSX }), MIME_XLSX);
+  } catch (e) { aviso(e.message); }
+}
+
+async function excelImportar(archivo) {
+  try {
+    const X = await cargarXLSX();
+    const wb = X.read(await archivo.arrayBuffer(), { type: 'array' });
+    const r = importarLibro(X, wb, S.tablas, archivo.name.replace(/\.[^.]+$/, ''));
+    ui.importacion = r;
+    const cuenta = {};
+    for (const e of r.proyecto.elementos) cuenta[e.tipo] = (cuenta[e.tipo] || 0) + 1;
+    const nAcero = r.proyecto.elementos.reduce((a, e) => a + (e.partidas.acero?.armado?.length || 0), 0);
+    abrirFlotante(`<div class="flot-cab"><h3>${icono('excel')} Vista previa</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">${icono('cerrar')}</button></div>
+      <p><b>${esc(archivo.name)}</b>: ${r.proyecto.elementos.length} elementos y ${nAcero} ítems de acero.</p>
+      <div class="chips-partidas">${Object.entries(cuenta).map(([t, k]) => `<span class="pchip">${icono(ICONO_TIPO[t] || 'manual')} ${esc(TIPOS[t].plural)}: <b>${k}</b></span>`).join('')}</div>
+      ${r.errores.length ? `<div class="errores-import"><p>${icono('aviso')} <b>${r.errores.length} fila${r.errores.length > 1 ? 's' : ''} con problemas</b> (no se agregan; corrige el Excel e importa de nuevo):</p>
+        <ul>${r.errores.map((e) => `<li><b>${esc(e.hoja)}${e.fila ? `, fila ${e.fila}` : ''}:</b> ${esc(e.msg)}</li>`).join('')}</ul></div>`
+        : `<p class="ok-norma">${icono('ok')} Sin errores.</p>`}
+      <div class="acciones">
+        <button type="button" class="primario" data-act="import-nuevo"${r.proyecto.elementos.length ? '' : ' disabled'}>Agregar como proyecto nuevo</button>
+        <button type="button" class="secundario" data-act="import-actual"${r.proyecto.elementos.length ? '' : ' disabled'}>Agregar al proyecto abierto</button>
+      </div>`, 'grande');
+  } catch (e) {
+    aviso(`No se pudo leer el Excel: ${e.message}`);
+  }
+}
+
+async function descargarPdf() {
+  let pdf;
+  try { pdf = await pdfDelInforme(); } catch (e) { aviso(`No se pudo crear el PDF: ${e.message}`); return; }
+  await guardarArchivo(pdf.nombre, pdf.blob, 'application/pdf');
 }
 
 async function compartirInforme() {
@@ -1235,8 +1410,23 @@ function accionEditor(b) {
       rehacerTab();
       return true;
     }
-    case 'item-agregar': el.partidas.acero.armado.push(itemNuevo(ds.tipo, el)); rehacerTab(); return true;
-    case 'item-quitar': el.partidas.acero.armado.splice(Number(ds.i), 1); rehacerTab(); return true;
+    case 'item-agregar':
+      el.partidas.acero.armado.push(itemNuevo(ds.tipo, el));
+      ui.itemAbierto = el.partidas.acero.armado.length - 1;
+      rehacerTab();
+      $(`.item-acero[data-i="${ui.itemAbierto}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return true;
+    case 'item-quitar': el.partidas.acero.armado.splice(Number(ds.i), 1); ui.itemAbierto = null; rehacerTab(); return true;
+    case 'item-duplicar': {
+      const i = Number(ds.i);
+      const copia = structuredClone(el.partidas.acero.armado[i]);
+      copia.uso = `${copia.uso || ''} (copia)`.trim();
+      el.partidas.acero.armado.splice(i + 1, 0, copia);
+      ui.itemAbierto = i + 1;
+      rehacerTab();
+      return true;
+    }
+    case 'rec-recomendado': el.partidas.acero.recCm = Number(ds.v); rehacerTab(); return true;
     case 'armado-tipico': el.partidas.acero.armado = TIPOS[el.tipo].armado(medidas(el), el); rehacerTab(); return true;
     case 'tramo-n': {
       const v = Math.max(0, num(getPath(el, ds.path)) + Number(ds.d));
@@ -1268,6 +1458,11 @@ function accionEditor(b) {
     }
     case 'zoom-armado': abrirFlotante(`<div class="flot-cab"><h3>Armado · ${esc(el.nombre)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>${elevacionHTML(el)}`, 'grande'); return true;
     case 'cerrar-editor': cerrarEditor(); return true;
+    case 'info': {
+      const [t, txt] = INFO[ds.tema] || ['Ayuda', ''];
+      abrirFlotante(`<div class="flot-cab"><h3>${icono('info')} ${esc(t)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">${icono('cerrar')}</button></div><p>${esc(txt)}</p>`, 'menu-flot');
+      return true;
+    }
     default: return false;
   }
 }
@@ -1304,7 +1499,9 @@ document.addEventListener('click', (ev) => {
   const pr = proyecto();
   switch (ds.act) {
     case 'selector': abrirFlotante(selectorTipos(), 'grande'); break;
-    case 'guia': abrirFlotante(guiaHTML(S.tablas), 'grande'); break;
+    case 'guia': abrirFlotante(guiaHTML(S.tablas, ds.pestana || ui.guiaPestana || 'concreto'), 'grande'); ui.guiaPestana = ds.pestana || ui.guiaPestana; break;
+    case 'tema': cambiarTema(); break;
+    case 'calc': abrirCalculadora(); break;
     case 'cerrar-flotante': cerrarFlotante(); break;
     case 'desplegar': ui.cerrados.clear(); render(); break;
     case 'contraer':
@@ -1404,6 +1601,33 @@ document.addEventListener('click', (ev) => {
       restaurarTablas(S); ui.confirmar = null; persistir(); render(); aviso('Tablas restauradas');
       break;
     case 'csv': exportarCSV(); break;
+    case 'xlsx-plantilla': excelPlantilla(); break;
+    case 'pendiente-guardar':
+    case 'pendiente-descartar': {
+      const pend = ui.pendienteAbrir;
+      ui.pendienteAbrir = null;
+      cerrarFlotante();
+      if (ds.act === 'pendiente-guardar') guardarEditor();
+      else cerrarEditor();
+      if (pend) abrirEditor(pend.id, pend.tab, true);
+      break;
+    }
+    case 'xlsx-exportar': excelExportar(); break;
+    case 'import-nuevo':
+    case 'import-actual': {
+      const r = ui.importacion;
+      if (!r) break;
+      if (ds.act === 'import-nuevo') {
+        S.proyectos.push(r.proyecto);
+        S.actual = r.proyecto.id;
+      } else {
+        proyecto().elementos.push(...r.proyecto.elementos);
+      }
+      ui.importacion = null;
+      persistir(); cerrarFlotante(); ir('partidas');
+      aviso(`${r.proyecto.elementos.length} elementos importados`);
+      break;
+    }
     case 'ver-informe': ui.vistaPrevia = vista; ir('informe'); break;
     case 'imprimir':
       document.querySelectorAll('.informe details').forEach((d) => { d.open = true; });
@@ -1423,8 +1647,8 @@ document.addEventListener('click', (ev) => {
       break;
     }
     case 'planilla': ui.planilla = ds.v; render(); break;
-    case 'csv-planilla': descargar(`planilla-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csvPlanillas(pr, S.tablas), 'text/csv;charset=utf-8'); break;
-    case 'respaldo': descargar(`metrado-respaldo-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S, null, 1), 'application/json'); break;
+    case 'csv-planilla': guardarArchivo(`planilla-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csvPlanillas(pr, S.tablas), 'text/csv;charset=utf-8'); break;
+    case 'respaldo': guardarArchivo(`metrado-respaldo-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S, null, 1), 'application/json'); break;
     default:
   }
 });
@@ -1502,7 +1726,59 @@ document.addEventListener('change', (ev) => {
     rehacerTab();
   }
 });
-document.addEventListener('toggle', (ev) => { if (ev.target.id === 'arbol') ui.arbolAbierto = ev.target.open; }, true);
+document.addEventListener('toggle', (ev) => {
+  const t = ev.target;
+  if (t.id === 'arbol') ui.arbolAbierto = t.open;
+  // Acordeón: solo un ítem de acero abierto a la vez.
+  if (t.classList?.contains('item-acero')) {
+    if (t.open) {
+      ui.itemAbierto = Number(t.dataset.i);
+      document.querySelectorAll('.item-acero[open]').forEach((d) => { if (d !== t) d.open = false; });
+    } else if (ui.itemAbierto === Number(t.dataset.i)) ui.itemAbierto = null;
+  }
+}, true);
+
+// Último campo numérico tocado: destino de "Usar resultado" en la calculadora.
+document.addEventListener('focusin', (ev) => {
+  const el = ev.target;
+  if (el.matches?.('input[data-num]')) {
+    const span = el.closest('label')?.querySelector('span')?.cloneNode(true);
+    span?.querySelector('.letra')?.remove();
+    ui.ultimoCampo = { input: el, etiqueta: span?.textContent?.trim() || 'campo' };
+  }
+});
+
+function abrirCalculadora() {
+  const destino = ui.ultimoCampo && document.contains(ui.ultimoCampo.input) ? ui.ultimoCampo : null;
+  abrirFlotante('', 'grande');
+  montarCalculadora($('#flotante-contenido'), S.tablas, destino);
+}
+
+function temaActual() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+function cambiarTema() {
+  const nuevo = temaActual() === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = nuevo;
+  try { localStorage.setItem('metrado-tema', nuevo); } catch { /* sin almacenamiento */ }
+  pintarCabecera();
+}
+
+// Botones de la cabecera y de las pestañas con sus iconos.
+function pintarCabecera() {
+  const oscuro = temaActual() === 'dark';
+  $('#acciones-cab').innerHTML = `
+    <button type="button" class="cab-btn" data-act="calc" aria-label="Calculadora" title="Calculadora">${icono('calculadora')}</button>
+    <button type="button" class="cab-btn" data-act="guia" aria-label="Guía para metrar" title="Guía para metrar">${icono('guia')}</button>
+    <button type="button" class="cab-btn" data-act="tema" aria-label="${oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}" title="${oscuro ? 'Modo claro' : 'Modo oscuro'}">${icono(oscuro ? 'sol' : 'luna')}</button>`;
+}
+
+function pintarPestanas() {
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    if (!b.querySelector('svg')) b.innerHTML = `${icono(b.dataset.vista)}<span>${b.textContent}</span>`;
+  });
+}
 
 document.addEventListener('submit', (ev) => {
   ev.preventDefault();
@@ -1520,6 +1796,12 @@ document.addEventListener('submit', (ev) => {
 });
 
 document.addEventListener('change', async (ev) => {
+  if (ev.target.id === 'importar-excel') {
+    const f = ev.target.files[0];
+    if (f) await excelImportar(f);
+    ev.target.value = '';
+    return;
+  }
   if (ev.target.id !== 'importar' && ev.target.id !== 'importar-agregar') return;
   const f = ev.target.files[0];
   if (!f) return;
@@ -1583,11 +1865,13 @@ function exportarCSV() {
   L.push([], [q('Mano de obra')], ['Categoria', 'HH', 'Costo S/'].map(q));
   for (const c of CATEGORIAS) L.push([q(NOMBRE_CATEGORIA[c]), n(s.hh[c]), n(s.hh[c] * num(S.tablas.costoHH[c]))]);
   const csv = `﻿${L.map((f) => f.join(';')).join('\r\n')}`;
-  descargar(`metrado-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csv, 'text/csv;charset=utf-8');
+  guardarArchivo(`metrado-${pr.nombre.replace(/[^\w-]+/g, '_')}.csv`, csv, 'text/csv;charset=utf-8');
 }
 
 // ---------- inicio ----------
 persistir(); // guarda desde el inicio (incluido el proyecto de ejemplo)
+pintarCabecera();
+pintarPestanas();
 // Pide al navegador que no borre los datos si falta espacio (solo con HTTPS o localhost).
 navigator.storage?.persist?.().catch(() => {});
 render();

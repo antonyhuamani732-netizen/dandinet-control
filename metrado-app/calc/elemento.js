@@ -21,6 +21,8 @@ export function contextoAcero(el) {
     ...(t.seccion ? t.seccion(m) : {}),
     tipo: el.tipo,
     criterio: el.criterio || 'E060',
+    // Un solo recubrimiento por partida (en cm); si no hay, cada ítem usa el suyo.
+    ...(el.partidas.acero?.recCm !== undefined && el.partidas.acero.recCm !== '' ? { rec: num(el.partidas.acero.recCm) / 100 } : {}),
   };
 }
 

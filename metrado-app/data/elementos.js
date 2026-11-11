@@ -34,7 +34,7 @@ export const TIPOS = {
   zapata: {
     esp: 'estructuras', nombre: 'Zapata', plural: 'Zapatas', pref: 'Z',
     dims: [d('A', 'Largo A', 1.5), d('B', 'Ancho B', 1.5), d('h', 'Peralte h', 0.6)],
-    partidas: ['concreto', 'encofrado', 'acero'], inactivas: ['encofrado'], mezcla: '210',
+    partidas: ['concreto', 'encofrado', 'acero'], inactivas: ['encofrado'], mezcla: '210', rec: 7.5,
     conc: (m) => [m.A, m.B, m.h], enc: (m) => [m.A, m.B, m.h], planta: (m) => ({ X: m.A, Y: m.B }),
     armado: () => [
       { tipo: 'malla', uso: 'Malla inferior en X', diam: '1/2', sep: 0.15, rec: 0.075, dir: 'X', ganchos: 2 },
@@ -45,7 +45,7 @@ export const TIPOS = {
     esp: 'estructuras', nombre: 'Columna', plural: 'Columnas', pref: 'C',
     dims: [d('b', 'Lado b', 0.25), d('h', 'Lado h', 0.25), d('H', 'Altura H', 2.8)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
-    conc: (m) => [m.b, m.h, m.H], enc: (m) => [m.b, m.h, m.H], criterio: 'E060',
+    conc: (m) => [m.b, m.h, m.H], enc: (m) => [m.b, m.h, m.H], criterio: 'E060', rec: 4,
     luz: (m) => m.H, seccion: (m) => ({ b: m.b, h: m.h }),
     armado: (m) => [
       { tipo: 'barras', uso: 'Longitudinal', modo: 'apoyos', cara: 'int', zona: 'corrido', diam: '1/2', cant: 4, rec: 0.04,
@@ -56,7 +56,7 @@ export const TIPOS = {
   viga: {
     esp: 'estructuras', nombre: 'Viga', plural: 'Vigas', pref: 'V',
     dims: [d('b', 'Base b', 0.25), d('h', 'Peralte h', 0.4), d('L', 'Luz libre L', 4), d('e', 'Espesor de losa e', 0.2)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', clase: 'peraltada', criterio: 'E060',
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', clase: 'peraltada', criterio: 'E060', rec: 4,
     conc: (m) => [m.b, m.h, m.L], enc: (m) => [m.b, m.h, m.L, m.e],
     luz: (m) => m.L, seccion: (m) => ({ b: m.b, h: m.h }),
     armado: (m, el = {}) => armadoViga(m, el.clase),
@@ -64,7 +64,7 @@ export const TIPOS = {
   placa: {
     esp: 'estructuras', nombre: 'Placa', plural: 'Placas', pref: 'PL',
     dims: [d('L', 'Longitud L', 2), d('e', 'Espesor e', 0.2), d('H', 'Altura H', 2.8)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
     conc: (m) => [m.L, m.e, m.H], enc: (m) => [m.L, m.H], planta: (m) => ({ X: m.L, Y: m.H }),
     armado: () => [
       { tipo: 'malla', uso: 'Horizontal', diam: '3/8', sep: 0.25, rec: 0.04, dir: 'X', ganchos: 0, capas: 2 },
@@ -74,7 +74,7 @@ export const TIPOS = {
   losa_maciza: {
     esp: 'estructuras', nombre: 'Losa maciza', plural: 'Losas macizas', pref: 'LM',
     dims: [d('A', 'Largo A', 5), d('B', 'Ancho B', 4), d('e', 'Espesor e', 0.15)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
     conc: (m) => [m.A, m.B, m.e], enc: (m) => [m.A, m.B], planta: (m) => ({ X: m.A, Y: m.B }),
     armado: () => [
       { tipo: 'malla', uso: 'Malla en X', diam: '3/8', sep: 0.2, rec: 0.02, dir: 'X', ganchos: 2 },
@@ -84,7 +84,7 @@ export const TIPOS = {
   losa_aligerada: {
     esp: 'estructuras', nombre: 'Losa aligerada', plural: 'Losas aligeradas', pref: 'LA',
     dims: [d('A', 'Luz A (dirección de viguetas)', 4), d('B', 'Ancho B', 5)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', peralte: '20',
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', peralte: '20', rec: 2,
     conc: (m) => [m.A, m.B], enc: (m) => [m.A, m.B], planta: (m) => ({ X: m.A, Y: m.B }),
     armado: (m) => {
       const viguetas = Math.max(1, Math.round(+m.B / 0.4));
@@ -99,7 +99,7 @@ export const TIPOS = {
     esp: 'estructuras', nombre: 'Escalera', plural: 'Escaleras', pref: 'E',
     dims: [d('B', 'Ancho B', 1), d('L', 'Longitud inclinada L', 3.2), d('t', 'Garganta t', 0.15),
       d('np', 'N° de pasos', 10), d('p', 'Paso p', 0.25), d('cp', 'Contrapaso cp', 0.175)],
-    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
+    partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
     conc: (m) => [m.B, m.L, m.t, m.np, m.p, m.cp], enc: (m) => [m.B, m.L], planta: (m) => ({ X: m.L, Y: m.B }),
     armado: () => [
       { tipo: 'malla', uso: 'Longitudinal', diam: '1/2', sep: 0.2, rec: 0.025, dir: 'X', ganchos: 2 },
@@ -171,7 +171,10 @@ export function nuevoElemento(tipo, nombre, id) {
     if (t.inactivas?.includes(p)) el.partidas[p].activa = false;
   }
   if (el.partidas.encofrado) el.partidas.encofrado.usos = 1;
-  if (el.partidas.acero) el.partidas.acero.armado = t.armado ? t.armado(medidas(el), el) : [];
+  if (el.partidas.acero) {
+    el.partidas.acero.recCm = t.rec ?? 4;
+    el.partidas.acero.armado = t.armado ? t.armado(medidas(el), el) : [];
+  }
   if (el.partidas.muro) {
     Object.assign(el.partidas.muro, {
       ladrillo: 'kk18', ladPers: { L: 24, A: 13, H: 9 }, aparejo: 'soga', junta: 1.5, mortero: '1:4', vanos: [],
