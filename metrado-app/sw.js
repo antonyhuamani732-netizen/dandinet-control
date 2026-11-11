@@ -1,6 +1,6 @@
 // Service worker: guarda la app para que funcione sin internet.
 // Sube VERSION cada vez que publiques cambios para que los celulares se actualicen.
-const VERSION = 'metrado-v6';
+const VERSION = 'metrado-v7';
 const ARCHIVOS = [
   './', './index.html', './styles.css', './app.js', './storage.js', './manifest.webmanifest',
   './data/capeco.js', './data/elementos.js',

@@ -1055,6 +1055,23 @@ function vistaTablas() {
 }
 
 // ---------- vista Proyectos ----------
+// Abierta por IP sin HTTPS, el navegador apaga el modo sin internet, instalar y compartir archivos.
+function avisoRedLocal() {
+  if (window.isSecureContext) return '';
+  const origen = esc(location.origin);
+  return `<details class="aviso-red">
+    <summary>Abierta por red local sin HTTPS: algunas funciones están apagadas</summary>
+    <p>Calcular, guardar, planillas, informe y <b>Descargar PDF</b> funcionan. El navegador apaga el <b>modo sin internet</b>, <b>instalar la app</b> y <b>compartir el PDF</b> porque la dirección no es segura.</p>
+    <p><b>Para activarlas en Chrome del celular</b> (una sola vez):</p>
+    <ol>
+      <li>Escribe <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> en la barra de direcciones.</li>
+      <li>Activa la opción (Enabled) y escribe <code>${origen}</code> en el cuadro.</li>
+      <li>Toca <b>Relaunch</b> y vuelve a abrir ${origen}.</li>
+    </ol>
+    <p class="nota">Tus datos se guardan en este celular y para esta dirección. Si cambia la IP de la PC, la app abre vacía: usa Descargar respaldo y Agregar proyecto desde archivo para pasarlos.</p>
+  </details>`;
+}
+
 function vistaProyectos() {
   const items = S.proyectos.map((p) => `<li class="proyecto${p.id === S.actual ? ' activo' : ''}">
       <input aria-label="Nombre del proyecto" class="nombre-proyecto" data-renombrar="${p.id}" value="${esc(p.nombre)}">
@@ -1065,6 +1082,7 @@ function vistaProyectos() {
         <button type="button" class="peligro" data-act="borrar-proyecto" data-id="${p.id}">${ui.confirmar === p.id ? 'Confirmar' : 'Borrar'}</button>
       </div></li>`).join('');
   return `<div class="cab-vista"><h2>Proyectos</h2></div>
+    ${avisoRedLocal()}
     <ul class="lista-proyectos">${items}</ul>
     <div class="acciones"><button type="button" class="primario" data-act="nuevo-proyecto">Nuevo proyecto</button></div>
     <h3>Respaldo</h3>
@@ -1181,7 +1199,7 @@ const VISTAS = { informe: vistaInforme, planilla: vistaPlanilla, partidas: vista
 
 function render() {
   const main = $('#vista');
-  main.dataset.vista = vista;
+  main.dataset.pantalla = vista;
   main.innerHTML = VISTAS[vista]();
   main.querySelectorAll('[data-indet]').forEach((i) => { i.indeterminate = true; });
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.vista === vista ? 'page' : 'false'));
@@ -1392,6 +1410,7 @@ document.addEventListener('click', (ev) => {
       window.print();
       break;
     case 'compartir': compartirInforme(); break;
+    case 'recargar': location.reload(); break;
     case 'pdf': descargarPdf(); break;
     case 'compartir-pdf':
       // Un toque nuevo permite abrir el menú de compartir aunque el PDF tardó en crearse.
@@ -1568,7 +1587,15 @@ function exportarCSV() {
 }
 
 // ---------- inicio ----------
+persistir(); // guarda desde el inicio (incluido el proyecto de ejemplo)
+// Pide al navegador que no borre los datos si falta espacio (solo con HTTPS o localhost).
+navigator.storage?.persist?.().catch(() => {});
 render();
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  // Si ya había una versión instalada y llega otra, avisa para recargar.
+  const habiaVersion = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (habiaVersion) aviso('Hay una versión nueva de la app', { act: 'recargar', texto: 'Actualizar' });
+  });
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

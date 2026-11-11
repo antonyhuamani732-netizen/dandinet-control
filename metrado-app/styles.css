@@ -467,7 +467,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 .pl-pie.fuerte td { font-weight: 700; color: var(--tinta); }
 
 @media (min-width: 1000px) {
-  #vista[data-vista="planilla"], #vista[data-vista="resumen"], #vista[data-vista="tablas"] { max-width: 1280px; }
+  #vista[data-pantalla="planilla"], #vista[data-pantalla="resumen"], #vista[data-pantalla="tablas"] { max-width: 1280px; }
   .planilla { max-height: none; }
   body.con-panel .contenido { max-width: none; margin-left: 0; margin-right: calc(min(48vw, 680px) + 8px); }
   body.con-panel .hoja {
@@ -535,3 +535,10 @@ a.boton { text-decoration: none; color: inherit; }
   .inf-elev .figura { max-height: 170px; }
   .inf-estribo-fig .figura { max-height: 120px; }
 }
+
+/* ---------- aviso de red local ---------- */
+.aviso-red { border: 1px solid var(--medio); border-left-width: 4px; border-radius: var(--radio); padding: 0 12px; background: var(--superficie); }
+.aviso-red > summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.aviso-red[open] { padding-bottom: 12px; }
+.aviso-red p, .aviso-red ol { margin: 0 0 8px; }
+.aviso-red code { overflow-wrap: anywhere; }

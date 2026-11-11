@@ -46,11 +46,25 @@ La app necesita HTTPS. Con GitHub Pages activo en este repositorio (rama `main`)
 
 Los datos viven solo en ese celular: usa **Proyectos → Descargar respaldo** para guardarlos o pasarlos a otro equipo.
 
+## Usar en la red local con la IP de tu PC
+Sirve para abrir la app en el celular sin subirla a internet (PC y celular en el mismo WiFi).
+
+1. Instala **Node.js LTS** en la PC (https://nodejs.org). Si no lo tienes, el iniciador usa Python.
+2. Haz doble clic en **`iniciar-servidor.bat`** (o en una terminal: `npm run local`).
+3. La ventana muestra la dirección para el celular, por ejemplo `http://192.168.1.10:8080/`. La primera vez Windows pregunta por el Firewall: permite **redes privadas**.
+4. Abre esa dirección en Chrome del celular.
+
+**Por IP sin HTTPS** el navegador apaga el modo sin internet, instalar la app y compartir el PDF (calcular, guardar, planillas, informe y Descargar PDF sí funcionan). Para activarlas en Chrome del celular: abre `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, actívalo, escribe la dirección (p. ej. `http://192.168.1.10:8080`) y toca **Relaunch**. La app muestra estos pasos en **Proyectos** cuando hace falta.
+
+- Los datos se guardan en el celular **por dirección**: si la IP de la PC cambia, la app abre vacía. Fija la IP de la PC en el router (reserva DHCP) o pasa los datos con *Descargar respaldo* → *Agregar proyecto desde archivo*.
+- Opcional, HTTPS: pon `cert.pem` y `key.pem` en `certificados/` (por ejemplo con `mkcert 192.168.1.10`) y el servidor abre también `https://IP:8443/`. Ese certificado debe estar instalado como confiable en el celular para que funcione el modo sin internet.
+- El servidor solo entrega los archivos de la app (no las pruebas, ni este servidor, ni los certificados).
+
 ## Desarrollo
 ```bash
 cd metrado-app
 npm test          # pruebas del motor de cálculo
-npm run serve     # http://localhost:5173
+npm run local     # servidor para la red local (puerto 8080)
 ```
 Al publicar cambios, sube `VERSION` en `sw.js` para que los celulares descarguen la nueva versión.
 
