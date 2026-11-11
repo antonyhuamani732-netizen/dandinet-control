@@ -24,7 +24,7 @@ Cada partida se puede **incluir o no**, usar **metrado calculado o valor fijo** 
 - **Guía** (botón ? arriba): acero corrido, bastones izquierdo/derecho, anclajes, tipos de viga, caso viga chata que llega a viga peraltada, confinamiento, empalmes y desperdicio.
 - **Como en una hoja de cálculo:** los campos numéricos aceptan fórmulas (`25.283/2`, `2.28+0.3*2-2*0.04`); medida en CAD ÷ escala (Tablas); estribos con gancho propio y cantidad fija; varillas **por peso + %** = REDONDEAR.MAS(kg ÷ peso de una varilla × 1.10), junto a las del corte optimizado.
 - **Planilla** (pestaña propia): planilla de metrados CAPECO (Ítem OE · Descripción · Und · N° veces · Largo · Ancho · Alto · Parcial · Total) y planilla de acero con columnas de longitud por diámetro, peso, varillas por peso + % y por corte. Exporta a CSV.
-- **Computadora y celular:** en pantallas anchas el editor queda como panel al costado de la lista y las planillas usan todo el ancho; en el celular sigue como ventana inferior.
+- **Computadora y celular:** el editor se adapta: en el celular ocupa toda la pantalla; en tablet y PC abre en ventana grande con los campos en columnas, y en la PC un botón lo pone **al costado** de la lista (se recuerda la elección). Las planillas usan todo el ancho.
 - **Informe para obra** (Resumen o Planilla › Informe): lista de pedido, corte de cada varilla dibujado (qué pieza va a qué elemento), cada elemento con su figura, elevación del armado, tabla de piezas y estribos explicados para el maestro, y mano de obra. Se eligen las secciones. **Descargar PDF** lo genera la propia app (A4, sin diálogo de impresión, funciona sin internet); **Compartir** envía el PDF completo por WhatsApp u otra app (o el texto si el celular no permite archivos); **Imprimir** sigue disponible.
 - **Agregar proyecto desde archivo** sin borrar lo que ya tienes.
 - **Varillas de 9 m optimizadas:** el corte agrupa piezas en varillas comerciales (primero el más largo) y parte con traslape las de más de 9 m.
@@ -77,7 +77,7 @@ cd metrado-app
 npm test          # pruebas del motor de cálculo
 npm run local     # servidor para la red local (puerto 8080)
 ```
-Al publicar cambios, sube `VERSION` en `sw.js` para que los celulares descarguen la nueva versión.
+Al publicar cambios, sube `VERSION` en `sw.js` y `VERSION_APP` en `app.js`. La app pide primero los archivos al servidor (con caché para usarla sin internet), así que la versión nueva se aplica sola al recargar; la versión instalada se ve al pie de **Proyectos**.
 
 | Archivo | Contenido |
 |---|---|

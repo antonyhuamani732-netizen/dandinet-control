@@ -16,6 +16,8 @@ const P = {
   ayuda: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01"/>',
   abajo: '<path d="M6 9l6 6 6-6"/>',
   arriba: '<path d="M6 15l6-6 6 6"/>',
+  expandir: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  costado: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7h.01"/>',
   exportar: '<path d="M12 3v12M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
   importar: '<path d="M12 15V3M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',

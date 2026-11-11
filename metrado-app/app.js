@@ -96,7 +96,13 @@ function leerPlegado() {
 function guardarPlegado() {
   try { localStorage.setItem('metrado-plegado', JSON.stringify([...ui.cerrados])); } catch { /* sin almacenamiento */ }
 }
-const ui = { cerrados: leerPlegado(), editor: null, deshacer: null, confirmar: null, obraSel: null };
+// Versión visible en Proyectos (súbela junto con VERSION de sw.js).
+const VERSION_APP = 'v10';
+// Editor en computadora: 'grande' (ventana casi a pantalla completa) o 'costado' (panel lateral).
+function leerModoEditor() {
+  try { return localStorage.getItem('metrado-editor') === 'costado' ? 'costado' : 'grande'; } catch { return 'grande'; }
+}
+const ui = { cerrados: leerPlegado(), modoEditor: leerModoEditor(), editor: null, deshacer: null, confirmar: null, obraSel: null };
 
 const proyecto = () => S.proyectos.find((p) => p.id === S.actual);
 function persistir() {
@@ -312,6 +318,7 @@ function editorHTML() {
         <input aria-label="Nombre o código" data-k="nombre" value="${esc(el.nombre)}" placeholder="Z-1, eje A">
         <label class="veces-campo"><span>×</span><input aria-label="Cantidad de elementos iguales" type="number" inputmode="decimal" min="1" step="1" data-k="n" value="${esc(el.n)}"></label>
       </div>
+      <button type="button" class="cerrar modo-editor" data-act="modo-editor" title="${ui.modoEditor === 'costado' ? 'Ver en pantalla completa' : 'Poner al costado de la lista'}" aria-label="${ui.modoEditor === 'costado' ? 'Ver en pantalla completa' : 'Poner al costado de la lista'}">${icono(ui.modoEditor === 'costado' ? 'expandir' : 'costado')}</button>
       <button type="button" class="cerrar" data-act="cerrar-editor" aria-label="Cerrar sin guardar">✕</button>
     </div>
     <nav class="hoja-tabs" role="tablist">${tabsEditor(el).map(([k, n]) => {
@@ -772,11 +779,28 @@ function abrirEditor(id, tab, forzar = false) {
   cerrarFlotante();
   $('#hoja-contenido').innerHTML = editorHTML();
   const d = $('#hoja');
-  // En computadora el editor queda como panel al costado y la lista sigue a la vista.
-  const panel = window.matchMedia('(min-width: 1000px)').matches;
+  colocarEditor();
+}
+
+// Celular: pantalla completa. Tablet/PC: ventana grande, o panel al costado si el usuario lo eligió.
+function colocarEditor() {
+  const d = $('#hoja');
+  const panel = ui.modoEditor === 'costado' && window.matchMedia('(min-width: 1000px)').matches;
   document.body.classList.toggle('con-panel', panel);
   if (d.open && d.matches(':modal') === panel) d.close();
   if (!d.open) { if (panel) d.show(); else d.showModal(); }
+}
+
+function cambiarModoEditor() {
+  ui.modoEditor = ui.modoEditor === 'costado' ? 'grande' : 'costado';
+  try { localStorage.setItem('metrado-editor', ui.modoEditor); } catch { /* sin almacenamiento */ }
+  const cuerpo = $('#hoja-tab');
+  const y = cuerpo ? cuerpo.scrollTop : 0;
+  $('#hoja-contenido').innerHTML = editorHTML();
+  colocarEditor();
+  const nuevo = $('#hoja-tab');
+  if (nuevo) nuevo.scrollTop = y;
+  aviso(ui.modoEditor === 'costado' ? 'Editor al costado de la lista' : 'Editor en pantalla completa');
 }
 
 function rehacerTab() {
@@ -1213,7 +1237,8 @@ function vistaProyectos() {
         <label class="pildora boton" for="importar-agregar">${icono('exportar')} Agregar proyecto desde archivo<input id="importar-agregar" type="file" accept=".json,application/json" hidden></label>
         <label class="pildora boton peligro-suave" for="importar">${icono('aviso')} Reemplazar todo con un respaldo<input id="importar" type="file" accept=".json,application/json" hidden></label>
       </div>
-    </div>`;
+    </div>
+    <p class="nota version-app">Metrado CAPECO ${VERSION_APP}</p>`;
 }
 
 // ---------- render ----------
@@ -1513,6 +1538,7 @@ document.addEventListener('click', (ev) => {
     case 'guia': abrirFlotante(guiaHTML(S.tablas, ds.pestana || ui.guiaPestana || 'concreto'), 'grande'); ui.guiaPestana = ds.pestana || ui.guiaPestana; break;
     case 'tema': cambiarTema(); break;
     case 'calc': abrirCalculadora(); break;
+    case 'modo-editor': cambiarModoEditor(); break;
     case 'cerrar-flotante': cerrarFlotante(); break;
     case 'desplegar': ui.cerrados.clear(); guardarPlegado(); render(); break;
     case 'contraer':
@@ -1888,10 +1914,12 @@ pintarPestanas();
 navigator.storage?.persist?.().catch(() => {});
 render();
 if ('serviceWorker' in navigator && window.isSecureContext) {
-  // Si ya había una versión instalada y llega otra, avisa para recargar.
+  // Si ya había una versión instalada y llega otra: recarga sola, salvo que haya cambios sin guardar.
   const habiaVersion = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (habiaVersion) aviso('Hay una versión nueva de la app', { act: 'recargar', texto: 'Actualizar' });
+    if (!habiaVersion) return;
+    if (ui.editor && hayCambios()) aviso('Hay una versión nueva de la app', { act: 'recargar', texto: 'Actualizar' });
+    else location.reload();
   });
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

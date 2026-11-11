@@ -48,8 +48,8 @@ function atender(req, res) {
     const ext = path.extname(archivo).toLowerCase();
     res.writeHead(200, {
       'Content-Type': TIPOS[ext] || 'application/octet-stream',
-      // El service worker y el HTML siempre frescos, para que las actualizaciones lleguen.
-      'Cache-Control': ext === '.html' || ruta === '/sw.js' ? 'no-cache' : 'max-age=300',
+      // Siempre frescos (red local): las actualizaciones llegan apenas se copian los archivos.
+      'Cache-Control': 'no-cache',
       'X-Content-Type-Options': 'nosniff',
     });
     res.end(datos);

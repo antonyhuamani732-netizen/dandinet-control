@@ -286,7 +286,18 @@ dialog::backdrop { background: rgb(10 12 11 / 0.55); }
 }
 .hoja[open] { display: flex; flex-direction: column; }
 #hoja-contenido, .hoja .editor { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 0; }
-@media (min-width: 800px) { .hoja { margin: auto; border-radius: 16px; height: 88dvh; } }
+/* Editor adaptable: celular = pantalla completa; tablet y PC = ventana grande centrada. */
+@media (max-width: 799px), (max-height: 500px) {
+  .hoja { width: 100%; max-width: none; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; box-shadow: none; }
+  .hoja .hoja-cab { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+}
+@media (min-width: 800px) and (min-height: 501px) {
+  .hoja { width: min(1180px, 96vw); max-width: none; height: 92dvh; max-height: 92dvh; margin: auto; border-radius: 16px; }
+  .hoja .rejilla { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+.modo-editor { display: none; }
+@media (min-width: 1000px) { .modo-editor { display: inline-grid; place-items: center; } .modo-editor svg { width: 18px; height: 18px; } }
+.version-app { text-align: center; margin-top: 18px; }
 .hoja-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 16px 8px; border-bottom: 1px solid var(--linea); }
 .tipo-el { width: 100%; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--tenue); }
 .hoja-nombre { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
@@ -471,12 +482,14 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
 @media (min-width: 1000px) {
   #vista[data-pantalla="planilla"], #vista[data-pantalla="resumen"], #vista[data-pantalla="tablas"] { max-width: 1280px; }
   .planilla { max-height: none; }
-  body.con-panel .contenido { max-width: none; margin-left: 0; margin-right: calc(min(48vw, 680px) + 8px); }
+  body.con-panel .contenido { max-width: none; margin-left: 0; margin-right: calc(min(58vw, 820px) + 8px); }
   body.con-panel .hoja {
-    position: fixed; inset: 64px 0 var(--tabs) auto; margin: 0; width: min(48vw, 680px); height: auto; max-height: none;
-    border-radius: 0; border-left: 1px solid var(--linea); box-shadow: -8px 0 24px rgb(0 0 0 / 0.12); z-index: 4;
+    position: fixed; inset: 0 0 0 auto; margin: 0; width: min(58vw, 820px); height: 100dvh; max-height: none;
+    border-radius: 0; border-left: 1px solid var(--linea); box-shadow: -8px 0 24px rgb(0 0 0 / 0.25); z-index: 30;
   }
-  body.con-panel .fab { right: calc(min(48vw, 680px) + 24px); }
+  body.con-panel .hoja .rejilla { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  body.con-panel .fab { right: calc(min(58vw, 820px) + 24px); }
+  body.con-panel .tabs, body.con-panel .barra { margin-right: min(58vw, 820px); max-width: none; }
   .tabs { max-width: 1280px; margin: 0 auto; }
 }
 
