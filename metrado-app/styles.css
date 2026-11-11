@@ -1,5 +1,7 @@
 /* Layout: una columna móvil (máx. 760 px), cabecera negra y pestañas fijas abajo.
    Tema estilo reproductor de música: oscuro por defecto, claro con el botón de la cabecera. */
+/* Lo oculto con el atributo hidden no se ve aunque su clase tenga display: flex/grid. */
+[hidden] { display: none !important; }
 :root {
   --bg: #121212;
   --superficie: #181818;

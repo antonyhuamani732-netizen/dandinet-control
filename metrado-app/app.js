@@ -89,7 +89,14 @@ function ejemplo() {
 // ---------- estado ----------
 const S = cargar(ejemplo);
 let vista = 'partidas';
-const ui = { cerrados: new Set(), editor: null, deshacer: null, confirmar: null, obraSel: null };
+// Grupos plegados: se recuerdan entre recargas (solo en este navegador).
+function leerPlegado() {
+  try { return new Set(JSON.parse(localStorage.getItem('metrado-plegado') || '[]')); } catch { return new Set(); }
+}
+function guardarPlegado() {
+  try { localStorage.setItem('metrado-plegado', JSON.stringify([...ui.cerrados])); } catch { /* sin almacenamiento */ }
+}
+const ui = { cerrados: leerPlegado(), editor: null, deshacer: null, confirmar: null, obraSel: null };
 
 const proyecto = () => S.proyectos.find((p) => p.id === S.actual);
 function persistir() {
@@ -230,7 +237,9 @@ function vistaPartidas() {
   const pr = proyecto();
   if (!pr) return '<p class="vacio">Crea un proyecto en la pestaña Proyectos.</p>';
   let html = `<div class="cab-vista"><h2>${esc(pr.nombre)}</h2>
-    <div class="barra-acciones"><button type="button" class="link" data-act="desplegar">Desplegar todo</button><button type="button" class="link" data-act="contraer">Contraer todo</button></div></div>`;
+    <div class="barra-acciones">${ui.cerrados.size
+      ? `<button type="button" class="pildora" data-act="desplegar" aria-label="Desplegar todo">${icono('abajo')} Desplegar todo</button>`
+      : `<button type="button" class="pildora" data-act="contraer" aria-label="Contraer todo">${icono('arriba')} Contraer todo</button>`}</div></div>`;
   for (const [ek, esp] of Object.entries(ESPECIALIDADES)) {
     const els = pr.elementos.filter((e) => e.especialidad === ek);
     const k = `esp:${ek}`;
@@ -846,6 +855,7 @@ function crearElemento(tipo) {
   pr.elementos.push(el);
   ui.cerrados.delete(`esp:${el.especialidad}`);
   ui.cerrados.delete(`grp:${tipo}`);
+  guardarPlegado();
   persistir();
   render();
   abrirEditor(el.id);
@@ -1490,6 +1500,7 @@ document.addEventListener('click', (ev) => {
   if (ds.nuevo) { cerrarFlotante(); crearElemento(ds.nuevo); return; }
   if (ds.toggle) {
     if (ui.cerrados.has(ds.toggle)) ui.cerrados.delete(ds.toggle); else ui.cerrados.add(ds.toggle);
+    guardarPlegado();
     render();
     return;
   }
@@ -1503,10 +1514,11 @@ document.addEventListener('click', (ev) => {
     case 'tema': cambiarTema(); break;
     case 'calc': abrirCalculadora(); break;
     case 'cerrar-flotante': cerrarFlotante(); break;
-    case 'desplegar': ui.cerrados.clear(); render(); break;
+    case 'desplegar': ui.cerrados.clear(); guardarPlegado(); render(); break;
     case 'contraer':
       Object.keys(ESPECIALIDADES).forEach((k) => ui.cerrados.add(`esp:${k}`));
       Object.keys(TIPOS).forEach((k) => ui.cerrados.add(`grp:${k}`));
+      guardarPlegado();
       render();
       break;
     case 'duplicar': {

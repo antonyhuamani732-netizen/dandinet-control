@@ -364,3 +364,9 @@ test('importar Excel informa errores por fila', () => {
   const { errores } = importarLibro(XLSX, ida(wb), T);
   assert.deepEqual(errores.map((e) => `${e.hoja}:${e.fila}`), ['Elementos:2', 'Elementos:3', 'Acero:2']);
 });
+
+test('CSS: lo marcado con hidden se oculta aunque su clase use display flex', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+});
