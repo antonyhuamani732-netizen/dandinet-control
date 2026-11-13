@@ -1,0 +1,349 @@
+// Figuras de referencia en SVG. Son esquemáticas: la forma no cambia de proporción,
+// pero las cotas muestran las medidas que el usuario escribió (mismas letras que los campos).
+
+const f2 = (v) => {
+  const n = parseFloat(String(v ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n.toFixed(2) : '–';
+};
+const cota = (letra, v) => `${letra} = ${f2(v)}`;
+
+function svg(contenido, vb = '-45 -8 370 212') {
+  return `<svg class="figura" viewBox="${vb}" role="img" xmlns="http://www.w3.org/2000/svg">${contenido}</svg>`;
+}
+
+function texto(x, y, t, ancla = 'middle', clase = 'fig-cota') {
+  return `<text x="${x}" y="${y}" text-anchor="${ancla}" class="${clase}">${t}</text>`;
+}
+
+// Línea de cota con marcas en los extremos.
+function lineaCota(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const L = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / L) * 4;
+  const ny = (dx / L) * 4;
+  return `<line class="fig-linea" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>
+    <line class="fig-linea" x1="${x1 - nx}" y1="${y1 - ny}" x2="${x1 + nx}" y2="${y1 + ny}"/>
+    <line class="fig-linea" x1="${x2 - nx}" y1="${y2 - ny}" x2="${x2 + nx}" y2="${y2 + ny}"/>`;
+}
+
+// Terreno rayado bajo una línea.
+function terreno(x1, x2, y) {
+  let r = `<line class="fig-suelo" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/>`;
+  for (let x = x1; x < x2; x += 9) r += `<line class="fig-suelo-raya" x1="${x}" y1="${y + 8}" x2="${x + 8}" y2="${y}"/>`;
+  return r;
+}
+
+// Caja en perspectiva caballera. W = ancho frontal, H = alto, D = profundidad (px).
+// armado(x, y, W, H, d) dibuja el acero sobre la caja; antes(x, y, W, H, d) va detrás (terreno).
+function caja(W, H, D, { ancho, fondo, alto }, { armado, antes, despues } = {}) {
+  const x = (280 - W - D) / 2;
+  const y = (180 - H + D) / 2 + 6;
+  const d = D;
+  const cara = `
+    <polygon class="fig-cara" points="${x},${y} ${x + W},${y} ${x + W},${y + H} ${x},${y + H}"/>
+    <polygon class="fig-tapa" points="${x},${y} ${x + d},${y - d} ${x + W + d},${y - d} ${x + W},${y}"/>
+    <polygon class="fig-lado" points="${x + W},${y} ${x + W + d},${y - d} ${x + W + d},${y + H - d} ${x + W},${y + H}"/>`;
+  const cotas = `
+    ${lineaCota(x, y + H + 12, x + W, y + H + 12)}
+    ${texto(x + W / 2, y + H + 26, ancho)}
+    ${lineaCota(x + W + 10, y + H + 4, x + W + d + 10, y + H - d + 4)}
+    ${texto(x + W + d / 2 + 16, y + H - d / 2 + 14, fondo, 'start')}
+    ${lineaCota(x - 10, y, x - 10, y + H)}
+    ${texto(x - 14, y + H / 2 + 4, alto, 'end')}`;
+  return svg((antes ? antes(x, y, W, H, d) : '') + cara + (armado ? armado(x, y, W, H, d) : '') + (despues ? despues(x, y, W, H, d) : '') + cotas);
+}
+
+// Acero dibujado en la cara frontal.
+const barraV = (x, y1, y2) => `<line class="fig-acero fino" x1="${x}" y1="${y1}" x2="${x}" y2="${y2}"/>`;
+const barraH = (x1, x2, y) => `<line class="fig-acero fino" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/>`;
+const punto = (x, y) => `<circle class="fig-barra" cx="${x}" cy="${y}" r="2.2"/>`;
+
+const armadoColumna = (x, y, W, H) => {
+  let r = barraV(x + 6, y + 3, y + H - 3) + barraV(x + W - 6, y + 3, y + H - 3);
+  for (let yy = y + 8; yy < y + H - 4; yy += yy < y + 30 || yy > y + H - 30 ? 6 : 14) r += `<line class="fig-estribo" x1="${x + 4}" y1="${yy}" x2="${x + W - 4}" y2="${yy}"/>`;
+  return r;
+};
+const armadoZapata = (x, y, W, H) => {
+  let r = barraH(x + 5, x + W - 5, y + H - 7);
+  for (let xx = x + 10; xx < x + W - 6; xx += 12) r += punto(xx, y + H - 11);
+  return r;
+};
+const columnaArriba = (x, y, W, H, d) => {
+  const cx = x + W / 2 + d / 2 - 12;
+  const cy = y - d / 2;
+  return `<polygon class="fig-cara" points="${cx},${cy - 40} ${cx + 24},${cy - 40} ${cx + 24},${cy} ${cx},${cy}"/>
+    <polygon class="fig-lado" points="${cx + 24},${cy - 40} ${cx + 32},${cy - 48} ${cx + 32},${cy - 8} ${cx + 24},${cy}"/>
+    <polygon class="fig-tapa" points="${cx},${cy - 40} ${cx + 8},${cy - 48} ${cx + 32},${cy - 48} ${cx + 24},${cy - 40}"/>
+    ${barraV(cx + 5, cy - 38, y + H - 9)}${barraV(cx + 19, cy - 38, y + H - 9)}`;
+};
+const mallaTapa = (x, y, W, H, d) => {
+  let r = '';
+  for (let i = 1; i < 9; i++) { const t = i / 9; r += `<line class="fig-acero fino" x1="${x + t * W}" y1="${y}" x2="${x + t * W + d}" y2="${y - d}"/>`; }
+  for (let i = 1; i < 5; i++) { const t = i / 5; r += `<line class="fig-acero fino" x1="${x + t * d}" y1="${y - t * d}" x2="${x + W + t * d}" y2="${y - t * d}"/>`; }
+  return r;
+};
+const mallaFrente = (x, y, W, H) => {
+  let r = '';
+  for (let xx = x + 8; xx < x + W - 4; xx += 13) r += barraV(xx, y + 4, y + H - 4);
+  for (let yy = y + 8; yy < y + H - 4; yy += 13) r += barraH(x + 4, x + W - 4, yy);
+  return r;
+};
+const sueloBajo = (prof) => (x, y, W, H, d) => terreno(x - 30, x + W + d + 30, y + H - prof);
+
+export function figuraElemento(tipo, m, el = {}) {
+  switch (tipo) {
+    case 'zapata':
+      return caja(150, 40, 46, { ancho: cota('A', m.A), fondo: cota('B', m.B), alto: cota('h', m.h) },
+        { armado: armadoZapata, despues: columnaArriba, antes: sueloBajo(-2) });
+    case 'cimiento':
+      return caja(180, 60, 26, { ancho: cota('L', m.L), fondo: cota('B', m.B), alto: cota('h', m.h) },
+        { despues: (x, y, W, H) => terreno(x - 20, x + W + 40, y + 14) + texto(x - 22, y + 10, 'terreno', 'end', 'fig-nota') });
+    case 'sobrecimiento':
+      return caja(180, 34, 16, { ancho: cota('L', m.L), fondo: cota('B', m.B), alto: cota('h', m.h) },
+        { antes: (x, y, W, H) => `<rect class="fig-lado" x="${x - 6}" y="${y + H}" width="${W + 12}" height="7"/>${texto(x - 8, y + H + 6, 'cimiento', 'end', 'fig-nota')}`,
+          despues: (x, y, W, H) => terreno(x + W + 8, x + W + 40, y + H + 3) });
+    case 'columna':
+      return caja(40, 120, 28, { ancho: cota('b', m.b), fondo: cota('h', m.h), alto: cota('H', m.H) }, { armado: armadoColumna });
+    case 'viga':
+      return el.clase ? figuraSeccionViga(el.clase, m)
+        : caja(180, 40, 24, { ancho: cota('L', m.L), fondo: cota('b', m.b), alto: cota('h', m.h) });
+    case 'placa':
+      return caja(120, 110, 14, { ancho: cota('L', m.L), fondo: cota('e', m.e), alto: cota('H', m.H) }, { armado: mallaFrente });
+    case 'losa_maciza':
+      return caja(170, 16, 60, { ancho: cota('A', m.A), fondo: cota('B', m.B), alto: cota('e', m.e) }, { armado: mallaTapa });
+    case 'losa_aligerada': return figuraAligerado(m, el.peralte);
+    case 'escalera': return figuraEscalera(m);
+    case 'muro': return figuraMuro(m, el.partidas?.muro?.vanos || [], el.partidas?.muro?.aparejo || 'soga');
+    default: return '';
+  }
+}
+
+function figuraAligerado(m, peralte) {
+  const x = 40;
+  const y = 22;
+  const W = 200;
+  const H = 120;
+  let viguetas = '';
+  let ladrillos = '';
+  for (let i = 0; i <= 7; i++) {
+    const yy = y + (i * H) / 7;
+    viguetas += `<line class="fig-vigueta" x1="${x}" y1="${yy}" x2="${x + W}" y2="${yy}"/>`;
+    if (i < 7) {
+      for (let j = 0; j < 8; j++) {
+        ladrillos += `<rect class="fig-ladrillo" x="${x + 4 + j * 24.4}" y="${yy + 3}" width="20" height="${H / 7 - 6}"/>`;
+      }
+    }
+  }
+  return svg(`
+    <rect class="fig-cara" x="${x}" y="${y}" width="${W}" height="${H}"/>
+    ${ladrillos}${viguetas}
+    <line class="fig-linea" x1="${x}" y1="${y + H + 12}" x2="${x + W}" y2="${y + H + 12}"/>
+    ${texto(x + W / 2, y + H + 26, `${cota('A', m.A)} (viguetas)`)}
+    <line class="fig-linea" x1="${x - 10}" y1="${y}" x2="${x - 10}" y2="${y + H}"/>
+    ${texto(x - 14, y + H / 2 + 4, cota('B', m.B), 'end')}
+    ${texto(x + W, y - 8, `h = ${peralte || 20} cm · viguetas @ 0.40`, 'end', 'fig-nota')}`);
+}
+
+function figuraEscalera(m) {
+  const pasos = 6;
+  const p = 26;
+  const cp = 18;
+  const x0 = 50;
+  const y0 = 150;
+  let pts = `${x0},${y0}`;
+  for (let i = 0; i < pasos; i++) {
+    pts += ` ${x0 + i * p},${y0 - (i + 1) * cp} ${x0 + (i + 1) * p},${y0 - (i + 1) * cp}`;
+  }
+  const xf = x0 + pasos * p;
+  const yf = y0 - pasos * cp;
+  const g = 14;
+  return svg(`
+    <polygon class="fig-cara" points="${pts} ${xf},${yf + g + 10} ${x0 + g},${y0 + 6} ${x0},${y0 + 6}"/>
+    <line class="fig-linea" x1="${x0 + 10}" y1="${y0 + 22}" x2="${xf + 10}" y2="${yf + g + 26}"/>
+    ${texto((x0 + xf) / 2 + 30, (y0 + yf) / 2 + 46, cota('L', m.L), 'start')}
+    ${texto(x0 + p * 2 + p / 2, y0 - cp * 3 - 6, cota('p', m.p))}
+    ${texto(x0 + p * 4 - 4, y0 - cp * 4.5 + 4, cota('cp', m.cp), 'end')}
+    ${texto(x0 + 4, y0 + 22, cota('t', m.t), 'end')}
+    ${texto(270, 20, `${cota('B', m.B)} · ${m.np ?? '–'} pasos`, 'end', 'fig-nota')}`);
+}
+
+function figuraMuro(m, vanos, aparejo = 'soga') {
+  const x = 30;
+  const y = 20;
+  const W = 220;
+  const H = 120;
+  // Tamaño de ladrillo visto según aparejo (px): soga 24×9, cabeza 13×9, canto 24×13.
+  const [lb, hb] = aparejo === 'cabeza' ? [13, 9] : aparejo === 'canto' ? [24, 13] : [24, 9];
+  const filas = Math.round(H / (hb + 1));
+  const alto = H / filas;
+  let hiladas = '';
+  for (let i = 0; i < filas; i++) {
+    const yy = y + i * alto;
+    const off = i % 2 ? lb / 2 : 0;
+    for (let xx = x - off; xx < x + W; xx += lb + 1) {
+      const x1 = Math.max(x, xx);
+      const x2 = Math.min(x + W, xx + lb);
+      if (x2 > x1) hiladas += `<rect class="fig-ladrillo-m" x="${x1.toFixed(1)}" y="${(yy + 0.5).toFixed(1)}" width="${(x2 - x1).toFixed(1)}" height="${(alto - 1).toFixed(1)}"/>`;
+    }
+  }
+  const huecos = vanos.length
+    ? `<rect class="fig-vano" x="${x + 30}" y="${y + 30}" width="36" height="${H - 30}"/>${vanos.length > 1 ? `<rect class="fig-vano" x="${x + 130}" y="${y + 30}" width="56" height="40"/>` : ''}`
+    : '';
+  return svg(`
+    <rect class="fig-junta" x="${x}" y="${y}" width="${W}" height="${H}"/>
+    ${hiladas}${huecos}
+    ${lineaCota(x, y + H + 12, x + W, y + H + 12)}
+    ${texto(x + W / 2, y + H + 26, cota('L', m.L))}
+    ${lineaCota(x + W + 10, y, x + W + 10, y + H)}
+    ${texto(x + W + 6, y - 6, cota('H', m.H), 'end')}
+    ${texto(x, y - 6, `aparejo de ${aparejo}`, 'start', 'fig-nota')}
+    ${vanos.length ? texto(x + 48, y + 22, `${vanos.length} vano${vanos.length > 1 ? 's' : ''}`, 'middle', 'fig-nota') : ''}`);
+}
+
+// Distribución de estribos a lo largo del elemento.
+export function figuraDistribucion(pos, largo, nFijos) {
+  const x = 12;
+  const W = 296;
+  const L = parseFloat(largo) || 1;
+  const marcas = pos.map((p, i) => {
+    const xx = x + (p / L) * W;
+    const fijo = i < nFijos || i >= pos.length - nFijos;
+    return `<line class="${fijo ? 'fig-estribo-fijo' : 'fig-estribo'}" x1="${xx.toFixed(1)}" y1="14" x2="${xx.toFixed(1)}" y2="46"/>`;
+  }).join('');
+  return `<svg class="figura distribucion" viewBox="0 0 320 70" role="img" xmlns="http://www.w3.org/2000/svg">
+    <rect class="fig-cara" x="${x}" y="18" width="${W}" height="24"/>
+    ${marcas}
+    ${texto(x, 62, '0', 'start')}${texto(x + W / 2, 62, `${pos.length} estribos`, 'middle', 'fig-nota')}${texto(x + W, 62, `${f2(L)} m`, 'end')}
+  </svg>`;
+}
+
+// Forma del estribo con medidas interiores y ganchos a 135°.
+export function figuraEstribo(b, h, gancho) {
+  const W = 110;
+  const H = Math.max(50, Math.min(150, (W * (h || 1)) / (b || 1)));
+  const x = 70;
+  const y = (180 - H) / 2;
+  const r = 6;
+  const g = 22;
+  return svg(`
+    <rect class="fig-acero" x="${x}" y="${y}" width="${W}" height="${H}" rx="${r}"/>
+    <line class="fig-acero" x1="${x + r}" y1="${y + 2}" x2="${x + r + g * 0.7}" y2="${y + 2 + g * 0.7}"/>
+    <line class="fig-acero" x1="${x + 2}" y1="${y + r}" x2="${x + 2 + g * 0.7}" y2="${y + r + g * 0.7}"/>
+    ${texto(x + W / 2, y + H + 18, `${f2(b)} m`)}
+    ${texto(x + W + 8, y + H / 2 + 4, `${f2(h)} m`, 'start')}
+    ${texto(x + 6, y - 8, `ganchos 135° de ${f2(gancho)} m`, 'start', 'fig-nota')}`);
+}
+
+// Planta de una malla con n barras (máx. 14 dibujadas).
+export function figuraMalla(dir, cant) {
+  const x = 40;
+  const y = 16;
+  const W = 200;
+  const H = 120;
+  const k = Math.min(cant || 0, 14);
+  let lineas = '';
+  for (let i = 0; i < k; i++) {
+    const t = k === 1 ? 0.5 : i / (k - 1);
+    lineas += dir === 'Y'
+      ? `<line class="fig-acero" x1="${x + 8 + t * (W - 16)}" y1="${y + 6}" x2="${x + 8 + t * (W - 16)}" y2="${y + H - 6}"/>`
+      : `<line class="fig-acero" x1="${x + 6}" y1="${y + 8 + t * (H - 16)}" x2="${x + W - 6}" y2="${y + 8 + t * (H - 16)}"/>`;
+  }
+  return svg(`<rect class="fig-cara" x="${x}" y="${y}" width="${W}" height="${H}"/>${lineas}
+    ${texto(x + W / 2, y + H + 18, `${cant} barras en ${dir}${cant > 14 ? ' (se dibujan 14)' : ''}`, 'middle', 'fig-nota')}`, '0 0 280 160');
+}
+
+// Sección transversal de la viga con la losa que llega a ella.
+export function figuraSeccionViga(clase, m) {
+  const E = 26; // espesor de losa (px)
+  const y0 = 40;
+  const nombre = { peraltada: 'Viga peraltada: cuelga bajo la losa', chata: 'Viga chata: del mismo espesor que la losa', borde: 'Viga de borde: losa a un solo lado' }[clase] || '';
+  let losa = '';
+  let viga;
+  if (clase === 'chata') {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="280" height="${E}"/>`;
+    viga = { x: 80, w: 120, h: E };
+  } else if (clase === 'borde') {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="170" height="${E}"/>`;
+    viga = { x: 190, w: 56, h: 96 };
+  } else {
+    losa = `<rect class="fig-cara" x="20" y="${y0}" width="280" height="${E}"/>`;
+    viga = { x: 112, w: 56, h: 96 };
+  }
+  const r = 6;
+  const barras = [0, 1].map((i) => {
+    const x = viga.x + r + 4 + i * (viga.w - 2 * r - 8);
+    return `<circle class="fig-barra" cx="${x}" cy="${y0 + r + 4}" r="3"/><circle class="fig-barra" cx="${x}" cy="${y0 + viga.h - r - 4}" r="3"/>`;
+  }).join('');
+  return svg(`
+    ${losa}
+    <rect class="${clase === 'chata' ? 'fig-tapa fig-chata' : 'fig-lado'}" x="${viga.x}" y="${y0}" width="${viga.w}" height="${viga.h}"/>
+    <rect class="fig-acero fino" x="${viga.x + r}" y="${y0 + r}" width="${viga.w - 2 * r}" height="${viga.h - 2 * r}" rx="3"/>
+    ${barras}
+    <line class="fig-linea" x1="${viga.x}" y1="${y0 + viga.h + 12}" x2="${viga.x + viga.w}" y2="${y0 + viga.h + 12}"/>
+    ${texto(viga.x + viga.w / 2, y0 + viga.h + 26, cota('b', m.b))}
+    <line class="fig-linea" x1="${viga.x + viga.w + 10}" y1="${y0}" x2="${viga.x + viga.w + 10}" y2="${y0 + viga.h}"/>
+    ${texto(viga.x + viga.w + 14, y0 + viga.h / 2 + 4, cota('h', m.h), 'start')}
+    <line class="fig-linea" x1="12" y1="${y0}" x2="12" y2="${y0 + E}"/>
+    ${texto(8, y0 + E / 2 + 4, cota('e', m.e), 'end')}
+    ${texto(140, 18, nombre, 'middle', 'fig-nota')}
+    ${texto(140, y0 + viga.h + 44, `L = ${f2(m.L)} m (luz libre)`, 'middle', 'fig-nota')}`);
+}
+
+// Elevación del armado: apoyos, barras con su zona y ganchos, estribos, zonas de confinamiento y empalme.
+// detalle: salida de calcArmado().detalle; extra = { zona, empalmes: { sup: [], inf: [], int: [] }, apoyos: {izq, der} }
+export function figuraArmado(luz, detalle, extra = {}) {
+  const L = parseFloat(luz) || 0;
+  if (!L) return '';
+  const x0 = 50;
+  const W = 240;
+  const X = (x) => x0 + (x / L) * W;
+  const sc = W / L;
+  const yT = 52;
+  const yB = 112;
+  const largo = (m) => (m > 0 ? Math.max(6, m * sc) : m < 0 ? m * sc : 0);
+  let g = '';
+  // apoyos
+  g += `<rect class="fig-lado" x="${x0 - 22}" y="${yT - 22}" width="22" height="${yB - yT + 44}"/>`;
+  g += `<rect class="fig-lado" x="${x0 + W}" y="${yT - 22}" width="22" height="${yB - yT + 44}"/>`;
+  g += `<rect class="fig-cara" x="${x0}" y="${yT}" width="${W}" height="${yB - yT}"/>`;
+  // zonas de confinamiento
+  const z = Math.min(parseFloat(extra.zona) || 0, L / 2);
+  if (z) {
+    g += `<rect class="fig-zona" x="${x0}" y="${yT}" width="${z * sc}" height="${yB - yT}"/><rect class="fig-zona" x="${X(L - z)}" y="${yT}" width="${z * sc}" height="${yB - yT}"/>`;
+  }
+  // zonas de empalme
+  const bandas = { sup: yT - 12, inf: yB + 4, int: yB + 4 };
+  for (const [cara, zonas] of Object.entries(extra.empalmes || {})) {
+    for (const e of zonas) g += `<rect class="fig-empalme" x="${X(e.x0)}" y="${bandas[cara]}" width="${(e.x1 - e.x0) * sc}" height="8"/>`;
+  }
+  // estribos
+  for (const d of detalle) {
+    if (d.it.tipo === 'estribos' && d.pos) {
+      for (const p of d.pos) if (p <= L) g += `<line class="fig-estribo" x1="${X(p).toFixed(1)}" y1="${yT + 3}" x2="${X(p).toFixed(1)}" y2="${yB - 3}"/>`;
+    }
+  }
+  // barras
+  const cuenta = { sup: 0, inf: 0, int: 0 };
+  detalle.forEach((d, i) => {
+    if (d.it.tipo !== 'barras' || !d.tramos) return;
+    const cara = d.it.cara || 'int';
+    const k = cuenta[cara]++;
+    const y = cara === 'sup' ? yT + 7 + k * 6 : cara === 'inf' ? yB - 7 - k * 6 : (yT + yB) / 2 + k * 6;
+    const dir = cara === 'inf' ? -1 : 1;
+    for (const t of d.tramos) {
+      const xa = X(t.x0) - (t.izq ? largo(t.izq.recto) : 0);
+      const xb = X(t.x1) + (t.der ? largo(t.der.recto) : 0);
+      let path = `M${xa.toFixed(1)},${y}`;
+      if (t.izq?.gancho) path = `M${xa.toFixed(1)},${(y + dir * Math.max(6, t.izq.gancho * sc)).toFixed(1)} L${xa.toFixed(1)},${y}`;
+      path += ` L${xb.toFixed(1)},${y}`;
+      if (t.der?.gancho) path += ` L${xb.toFixed(1)},${(y + dir * Math.max(6, t.der.gancho * sc)).toFixed(1)}`;
+      g += `<path class="fig-acero" d="${path}"/>`;
+      g += `<text x="${((xa + xb) / 2).toFixed(1)}" y="${y - 2}" text-anchor="middle" class="fig-num">${i + 1}</text>`;
+    }
+  });
+  g += texto(x0 - 11, yB + 34, extra.apoyos?.izq || '', 'middle', 'fig-nota');
+  g += texto(x0 + W + 11, yB + 34, extra.apoyos?.der || '', 'middle', 'fig-nota');
+  g += texto(x0 + W / 2, yB + 34, `luz ${f2(L)} m`, 'middle', 'fig-nota');
+  return `<svg class="figura armado" viewBox="0 0 340 160" role="img" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+}

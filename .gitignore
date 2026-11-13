@@ -34,3 +34,6 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 ~$*
+
+# Certificados locales del servidor de metrado-app (nunca al repositorio)
+metrado-app/certificados/
