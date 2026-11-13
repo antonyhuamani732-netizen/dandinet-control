@@ -1,9 +1,10 @@
 import { CATEGORIAS, NOMBRE_CATEGORIA, ACCESORIOS } from './data/capeco.js';
-import { ESPECIALIDADES, PARTIDAS, TIPOS, CLASES_VIGA, medidas, nuevoElemento } from './data/elementos.js';
-import { calcElemento, calcPartidaElemento, claveRendimiento, esFijo, contextoAcero } from './calc/elemento.js';
+import { ESPECIALIDADES, PARTIDAS, TIPOS, CLASES_VIGA, medidas, nuevoElemento, esLibre, LIBRE_POR_ESP, nuevaDesdePlantilla, plantillaDesde, moverEspecialidad, filaDetalle, SUBTEMAS, subtemaDe, subtemasEspecialidad, codigoSubtema } from './data/elementos.js';
+import { CATALOGO, agruparCatalogo } from './data/catalogo.js';
+import { calcElemento, calcPartidaElemento, claveRendimiento, esFijo, contextoAcero, parcialFila, metradoManual, usaDetalle } from './calc/elemento.js';
 import { piezasItem, calcArmado, APOYOS, ZONAS } from './calc/acero.js';
 import { CRITERIOS, confinamiento, distribuirSegunNorma, verificarEstribos, zonasEmpalme, dbDesdeKgm, NOTA_EMPALME, fichaDiametro, recubrimientoRecomendado } from './calc/norma.js';
-import { icono, ICONO_TIPO } from './ui/iconos.js';
+import { icono, ICONO_TIPO, ICONO_ESP } from './ui/iconos.js';
 import { montarCalculadora } from './ui/calculadora.js';
 import { textoPatron } from './calc/corte.js';
 import { resumen, seleccionada, claveSel } from './calc/index.js';
@@ -97,7 +98,7 @@ function guardarPlegado() {
   try { localStorage.setItem('metrado-plegado', JSON.stringify([...ui.cerrados])); } catch { /* sin almacenamiento */ }
 }
 // Versión visible en Proyectos (súbela junto con VERSION de sw.js).
-const VERSION_APP = 'v10';
+const VERSION_APP = 'v12';
 // Editor en computadora: 'grande' (ventana casi a pantalla completa) o 'costado' (panel lateral).
 function leerModoEditor() {
   try { return localStorage.getItem('metrado-editor') === 'costado' ? 'costado' : 'grande'; } catch { return 'grande'; }
@@ -144,7 +145,10 @@ function opcionesMezcla(tipo) {
 
 function resumenMedidas(el) {
   const t = TIPOS[el.tipo];
-  if (el.tipo === 'manual') return el.partidas.manual.und || '';
+  if (esLibre(el.tipo)) {
+    const p = el.partidas.manual;
+    return `${fmt(metradoManual(p))} ${p.und || ''} por elemento${usaDetalle(p) ? ` · ${p.detalle.length} filas` : ''}`;
+  }
   return t.dims.slice(0, 3).map((x) => fmt(num(el.dims[x.k]))).join(' × ');
 }
 
@@ -234,57 +238,150 @@ function totalesGrupo(els) {
       tot[k].cant += r.cantidad;
     }
   }
-  return Object.values(tot).map((t) => `${fmt(t.cant, 1)} ${esc(t.und)}`).join(' · ');
+  // Máximo 3 unidades para que la cabecera no se desborde.
+  const lista = Object.values(tot).map((t) => `${fmt(t.cant, 1)} ${esc(t.und)}`);
+  return lista.length > 3 ? `${lista.slice(0, 3).join(' · ')} …` : lista.join(' · ');
+}
+
+// Especialidades visibles en Partidas: las elegidas en los datos del proyecto, más las que ya tienen elementos.
+function especialidadesProyecto(pr) {
+  const elegidas = pr.datos?.especialidades;
+  return Object.entries(ESPECIALIDADES).filter(([ek]) => !Array.isArray(elegidas) || elegidas.includes(ek) || pr.elementos.some((e) => e.especialidad === ek));
+}
+
+// Subtemas de una especialidad (OE.4.1 Aparatos sanitarios…), con sus tarjetas.
+function gruposEspecialidad(els, ek) {
+  return subtemasEspecialidad(ek, els).map((sub) => ({
+    k: `sub:${ek}:${sub.nombre}`,
+    codigo: sub.codigo,
+    titulo: sub.nombre,
+    els: sub.els,
+    fijos: Object.entries(TIPOS).filter(([, t]) => t.esp === ek && t.subtema === sub.nombre),
+  }));
 }
 
 function abierto(k) { return !ui.cerrados.has(k); }
 
+// Botones para agregar dentro de un subtema: los elementos con figura que le tocan y el catálogo de ese subtema.
+function botonesSubtema(ek, g) {
+  const fijos = g.fijos.map(([tk, t]) => `<button type="button" class="agregar-aqui" data-nuevo="${tk}">${icono('mas')} ${esc(t.nombre)}</button>`).join('');
+  const texto = fijos ? `Otra partida en ${esc(g.titulo.toLowerCase())}` : `Agregar en ${esc(g.titulo.toLowerCase())}`;
+  return `<div class="agregar-fila">${fijos}<button type="button" class="agregar-aqui" data-act="selector" data-esp="${ek}" data-grupo="${esc(g.titulo)}">${icono('mas')} ${texto}</button></div>`;
+}
+
 function vistaPartidas() {
   const pr = proyecto();
   if (!pr) return '<p class="vacio">Crea un proyecto en la pestaña Proyectos.</p>';
-  let html = `<div class="cab-vista"><h2>${esc(pr.nombre)}</h2>
+  const d = pr.datos || {};
+  const meta = [d.propietario, d.ubicacion].filter(Boolean).map(esc).join(' · ');
+  let html = `<div class="cab-vista cab-proyecto">
+      <div class="cab-titulo"><h2>${esc(pr.nombre)}</h2>${meta ? `<p class="nota meta-proyecto">${meta}</p>` : `<button type="button" class="link" data-act="datos-proyecto" data-id="${pr.id}">Completar datos del proyecto</button>`}</div>
     <div class="barra-acciones">${ui.cerrados.size
       ? `<button type="button" class="pildora" data-act="desplegar" aria-label="Desplegar todo">${icono('abajo')} Desplegar todo</button>`
       : `<button type="button" class="pildora" data-act="contraer" aria-label="Contraer todo">${icono('arriba')} Contraer todo</button>`}</div></div>`;
-  for (const [ek, esp] of Object.entries(ESPECIALIDADES)) {
+  for (const [ek, esp] of especialidadesProyecto(pr)) {
     const els = pr.elementos.filter((e) => e.especialidad === ek);
     const k = `esp:${ek}`;
     html += `<section class="esp">
       <button type="button" class="esp-cab" data-toggle="${k}" aria-expanded="${abierto(k)}">
-        <span class="codigo">${esp.codigo}</span><span class="titulo">${esp.nombre}</span><small>${els.length} elemento${els.length === 1 ? '' : 's'}</small><span class="flecha" aria-hidden="true"></span>
+        <span class="codigo">${esp.codigo}</span><span class="titulo">${esp.nombre}</span><small>${els.length} ${els.length === 1 ? 'partida' : 'partidas'}</small><span class="flecha" aria-hidden="true"></span>
       </button>
       <div class="esp-cuerpo"${abierto(k) ? '' : ' hidden'}>`;
-    const tipos = Object.entries(TIPOS).filter(([, t]) => t.esp === ek);
-    let algun = false;
-    for (const [tk, t] of tipos) {
-      const g = els.filter((e) => e.tipo === tk);
-      if (!g.length) continue;
-      algun = true;
-      const gk = `grp:${tk}`;
+    const grupos = gruposEspecialidad(els, ek);
+    for (const g of grupos) {
       html += `<div class="grupo">
-        <button type="button" class="grupo-cab" data-toggle="${gk}" aria-expanded="${abierto(gk)}">
-          <span class="titulo">${icono(ICONO_TIPO[tk] || 'manual')} ${esc(t.plural)} <span class="cuenta">(${g.length})</span></span><small>${totalesGrupo(g)}</small><span class="flecha" aria-hidden="true"></span>
+        <button type="button" class="grupo-cab" data-toggle="${esc(g.k)}" aria-expanded="${abierto(g.k)}">
+          <span class="titulo"><span class="sub-cod">${esc(g.codigo)}</span><span class="titulo-txt">${esc(g.titulo)}</span><span class="cuenta">(${g.els.length})</span></span><small>${totalesGrupo(g.els)}</small><span class="flecha" aria-hidden="true"></span>
         </button>
-        <div class="grupo-cuerpo"${abierto(gk) ? '' : ' hidden'}>
-          ${g.map(tarjetaElemento).join('')}
-          <button type="button" class="agregar-aqui" data-nuevo="${tk}">Agregar ${esc(t.nombre.toLowerCase())}</button>
+        <div class="grupo-cuerpo"${abierto(g.k) ? '' : ' hidden'}>
+          ${g.els.map(tarjetaElemento).join('')}
+          ${botonesSubtema(ek, g)}
         </div></div>`;
     }
-    if (!algun) {
-      html += `<p class="vacio">Sin elementos. ${tipos.map(([tk, t]) => `<button type="button" class="link" data-nuevo="${tk}">Agregar ${esc(t.nombre.toLowerCase())}</button>`).join(' ')}</p>`;
-    }
+    // Subtemas de la norma que aún no tienen partidas: accesos rápidos para empezar.
+    const usados = new Set(grupos.map((g) => g.titulo));
+    const faltan = (SUBTEMAS[ek] || []).filter((n) => !usados.has(n));
+    if (!grupos.length) html += `<p class="nota vacio-txt">Aún no hay partidas de ${esc(esp.nombre.toLowerCase())}. Elige un subtema:</p>`;
+    html += `<div class="subtemas-vacios">${faltan.map((n) => `<button type="button" class="pildora" data-act="selector" data-esp="${ek}" data-grupo="${esc(n)}">${icono('mas')}<span class="sub-cod">${esc(codigoSubtema(ek, n, els))}</span>${esc(n)}</button>`).join('')}
+      <button type="button" class="pildora" data-act="selector" data-esp="${ek}">${icono('buscar')} ${ek === 'otras' ? 'Agregar otra partida' : 'Todo el catálogo'}</button></div>`;
     html += '</div></section>';
   }
-  return `${html}<button type="button" class="fab" data-act="selector">Agregar elemento</button>`;
+  return `${html}<button type="button" class="fab" data-act="selector">Agregar</button>`;
 }
 
-function selectorTipos() {
-  return `<div class="flot-cab"><h3>Agregar elemento</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
-    ${Object.entries(ESPECIALIDADES).map(([ek, esp]) => `<h4>${esp.nombre}</h4><div class="selector">
-      ${Object.entries(TIPOS).filter(([, t]) => t.esp === ek).map(([tk, t]) => {
-        const el = nuevoElemento(tk, '', 'x');
-        return `<button type="button" class="opcion-tipo" data-nuevo="${tk}">${figuraElemento(tk, medidas(el), el) || '<span class="sin-fig">Libre</span>'}<span>${esc(t.nombre)}</span></button>`;
-      }).join('')}</div>`).join('')}`;
+// ---------- selector: por especialidad y subtema (elementos con figura + catálogo + mis partidas) ----------
+function botonPlantilla(pl, origen, i) {
+  return `<button type="button" class="opcion-partida" data-plantilla="${origen}:${i}" data-buscar="${esc(`${pl.nombre} ${pl.grupo} ${pl.und}`.toLowerCase())}">
+    <span class="op-nombre">${origen === 'mia' ? icono('estrella') : ''}${esc(pl.nombre)}</span><span class="op-und">${esc(pl.und)}</span></button>`;
+}
+
+function figuraTipo(tk, t) {
+  const el = nuevoElemento(tk, '', 'x');
+  return `<button type="button" class="opcion-tipo" data-nuevo="${tk}" data-buscar="${esc(t.nombre.toLowerCase())}">${figuraElemento(tk, medidas(el), el) || ''}<span>${esc(t.nombre)}</span></button>`;
+}
+
+// soloEsp: abre esa especialidad; soloGrupo: muestra solo ese subtema.
+function selectorTipos(soloEsp = null, soloGrupo = null) {
+  const pr = proyecto();
+  const elsPr = pr ? pr.elementos : [];
+  const visibles = pr ? especialidadesProyecto(pr).map(([k]) => k) : Object.keys(ESPECIALIDADES);
+  const mias = (S.misPartidas || []).map((x, i) => ({ ...x, i }));
+  const secciones = Object.entries(ESPECIALIDADES).filter(([ek]) => !soloGrupo || ek === soloEsp).map(([ek, esp]) => {
+    const libreTipo = LIBRE_POR_ESP[ek];
+    const subDe = (grupo) => subtemaDe({ especialidad: ek, tipo: libreTipo, grupo });
+    const delCat = CATALOGO.map((x, i) => ({ ...x, i })).filter((x) => x.esp === ek);
+    const propias = mias.filter((x) => x.esp === ek);
+    // Subtemas: los de la norma, luego los que solo existen en Mis partidas o en el proyecto.
+    const nombres = [...(SUBTEMAS[ek] || [])];
+    for (const n of [...propias.map((x) => subDe(x.grupo)), ...subtemasEspecialidad(ek, elsPr).map((x) => x.nombre)]) if (!nombres.includes(n)) nombres.push(n);
+    if (soloGrupo && !nombres.includes(soloGrupo)) nombres.push(soloGrupo);
+    const bloques = nombres.filter((n) => !soloGrupo || n === soloGrupo).map((n) => {
+      const figs = Object.entries(TIPOS).filter(([, t]) => t.esp === ek && t.subtema === n).map(([tk, t]) => figuraTipo(tk, t)).join('');
+      const mis = propias.filter((x) => subDe(x.grupo) === n).map((x) => botonPlantilla(x, 'mia', x.i)).join('');
+      const cat = delCat.filter((x) => x.grupo === n).map((x) => botonPlantilla(x, 'cat', x.i)).join('');
+      const nueva = `<button type="button" class="opcion-partida nueva" data-nuevo="${libreTipo}" data-grupo="${esc(n)}" data-buscar="partida nueva en blanco propia ${esc(n.toLowerCase())}"><span class="op-nombre">${icono('mas')} Partida nueva en ${esc(n.toLowerCase())}</span></button>`;
+      return `<div class="cat-grupo">
+        <h5><span class="sub-cod">${esc(codigoSubtema(ek, n, elsPr))}</span> ${esc(n)}</h5>
+        ${figs ? `<div class="selector">${figs}</div>` : ''}
+        <div class="lista-partidas">${mis}${cat}${nueva}</div>
+      </div>`;
+    }).join('');
+    const abierta = soloEsp ? soloEsp === ek : visibles.includes(ek) && ek === visibles[0];
+    const subtemaPropio = soloGrupo ? '' : `<div class="cat-grupo"><h5>Subtema propio</h5><div class="lista-partidas"><button type="button" class="opcion-partida nueva" data-nuevo="${libreTipo}" data-buscar="partida nueva en blanco propia subtema"><span class="op-nombre">${icono('mas')} Partida nueva con un subtema propio</span></button></div></div>`;
+    return `<details class="sel-esp" data-esp="${ek}"${abierta ? ' open' : ''}>
+      <summary><span class="codigo">${esp.codigo}</span><span class="titulo">${icono(ICONO_ESP[ek] || 'manual')} ${esc(esp.nombre)}</span><span class="flecha" aria-hidden="true"></span></summary>
+      <div class="sel-cuerpo">${bloques}${subtemaPropio}</div>
+    </details>`;
+  }).join('');
+  const titulo = soloGrupo ? `${esc(codigoSubtema(soloEsp, soloGrupo, elsPr))} ${esc(soloGrupo)}` : 'Agregar partida';
+  const arriba = soloGrupo
+    ? `<button type="button" class="link" data-act="selector" data-esp="${soloEsp}">${icono('buscar')} Ver todo el catálogo de ${esc(ESPECIALIDADES[soloEsp].nombre.toLowerCase())}</button>`
+    : `<label class="buscador">${icono('buscar')}<input type="search" id="buscar-partida" placeholder="Buscar: tarrajeo, tomacorriente, codo…" autocomplete="off"></label>`;
+  return `<div class="flot-cab"><h3>${titulo}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
+    ${arriba}
+    <p class="nota">Valores referenciales (unidad, rendimiento, cuadrilla y materiales): revísalos en cada partida.</p>
+    <div class="sel-lista">${secciones}</div>
+    <p class="nota sin-resultados" hidden>No hay partidas con ese nombre. Usa “Partida nueva”.</p>`;
+}
+
+function filtrarSelector(texto) {
+  const q = texto.trim().toLowerCase();
+  const cont = $('#flotante-contenido');
+  let total = 0;
+  cont.querySelectorAll('.sel-esp').forEach((sec) => {
+    let n = 0;
+    sec.querySelectorAll('[data-buscar]').forEach((b) => {
+      const ok = !q || b.dataset.buscar.includes(q);
+      b.hidden = !ok;
+      if (ok && !b.classList.contains('nueva')) n++;
+    });
+    sec.querySelectorAll('.cat-grupo').forEach((g) => { g.hidden = !!q && !g.querySelector('[data-buscar]:not([hidden])'); });
+    sec.querySelectorAll('.selector').forEach((sel) => { sel.hidden = !!q && !sel.querySelector('[data-buscar]:not([hidden])'); });
+    if (q) sec.open = n > 0;
+    sec.hidden = !!q && n === 0;
+    total += n;
+  });
+  cont.querySelector('.sin-resultados').hidden = !q || total > 0;
 }
 
 function menuElemento(el) {
@@ -304,7 +401,7 @@ function menuElemento(el) {
 // ---------- editor flotante del elemento ----------
 function tabsEditor(el) {
   const t = [];
-  if (el.tipo !== 'manual') t.push(['medidas', 'Medidas']);
+  if (!esLibre(el.tipo)) t.push(['medidas', 'Medidas']);
   for (const c of Object.keys(el.partidas)) t.push([c, c === 'manual' ? 'Partida' : PARTIDAS[c].nombre]);
   return t;
 }
@@ -315,7 +412,7 @@ function editorHTML() {
     <div class="hoja-cab">
       <span class="tipo-el">${esc(TIPOS[el.tipo].nombre)}</span>
       <div class="hoja-nombre">
-        <input aria-label="Nombre o código" data-k="nombre" value="${esc(el.nombre)}" placeholder="Z-1, eje A">
+        <textarea aria-label="Nombre o código" data-k="nombre" rows="1" class="nombre-el" placeholder="Z-1, eje A">${esc(el.nombre)}</textarea>
         <label class="veces-campo"><span>×</span><input aria-label="Cantidad de elementos iguales" type="number" inputmode="decimal" min="1" step="1" data-k="n" value="${esc(el.n)}"></label>
       </div>
       <button type="button" class="cerrar modo-editor" data-act="modo-editor" title="${ui.modoEditor === 'costado' ? 'Ver en pantalla completa' : 'Poner al costado de la lista'}" aria-label="${ui.modoEditor === 'costado' ? 'Ver en pantalla completa' : 'Poner al costado de la lista'}">${icono(ui.modoEditor === 'costado' ? 'expandir' : 'costado')}</button>
@@ -729,27 +826,98 @@ function muroHTML(el) {
     <button type="button" class="secundario chico" data-act="vano-agregar">Agregar vano</button>`;
 }
 
+// Detalle de metrado: una fila por parte (N° veces × largo × ancho × alto). "Al pedido" = sale como material.
+function detalleHTML(p) {
+  const base = 'partidas.manual.detalle';
+  const vacio = (v) => v === undefined || v === null || String(v).trim() === '';
+  const filas = p.detalle.map((f, i) => {
+    // Accesorio (va al pedido y sin medidas): fila compacta con descripción, cantidad y unidad.
+    if (f.material && vacio(f.largo) && vacio(f.ancho) && vacio(f.alto)) {
+      return `<div class="fila-acc">
+      ${campo('Accesorio / material', `${base}.${i}.desc`, f.desc, { texto: true, placeholder: 'Codo PVC 1/2" × 90°' })}
+      ${campo('Cantidad', `${base}.${i}.veces`, f.veces, { placeholder: '0' })}
+      <label class="campo" for="det-und-${i}"><span>Und</span><input id="det-und-${i}" type="text" data-k="${base}.${i}.und" value="${esc(f.und || '')}" placeholder="${esc(p.und || 'und')}"></label>
+      <label class="check chico-check" title="Desmarca si no debe salir en la lista de pedido"><input type="checkbox" data-k="${base}.${i}.material" data-bool data-rehacer checked><span>Pedido</span></label>
+      <button type="button" class="quitar-ico" data-act="det-quitar" data-i="${i}" aria-label="Quitar ${esc(f.desc || 'fila')}">${icono('borrar')}</button>
+    </div>`;
+    }
+    return `<div class="fila-det${f.material ? ' es-material' : ''}">
+      ${campo('Descripción', `${base}.${i}.desc`, f.desc, { texto: true, placeholder: 'Eje A, baño 1, codo 1/2"…' })}
+      ${campo('N° veces', `${base}.${i}.veces`, f.veces, { placeholder: '1' })}
+      ${campo('Largo', `${base}.${i}.largo`, f.largo)}
+      ${campo('Ancho', `${base}.${i}.ancho`, f.ancho)}
+      ${campo('Alto', `${base}.${i}.alto`, f.alto)}
+      <div class="det-parcial"><span>Parcial</span><output id="det-parcial-${i}">${fmt(parcialFila(f))}</output></div>
+      <div class="det-pie">
+        <label class="check chico-check"><input type="checkbox" data-k="${base}.${i}.material" data-bool data-rehacer${f.material ? ' checked' : ''}><span>Va al pedido</span></label>
+        ${f.material ? `<label class="campo det-und" for="det-und-${i}"><span>Und</span><input id="det-und-${i}" type="text" data-k="${base}.${i}.und" value="${esc(f.und || '')}" placeholder="${esc(p.und || 'und')}"></label>` : ''}
+        <button type="button" class="quitar-ico" data-act="det-quitar" data-i="${i}" aria-label="Quitar fila">${icono('borrar')}</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="detalle">${filas || '<p class="nota">Sin filas.</p>'}</div>
+    <div class="det-total"><span>Total del detalle</span><b><output id="det-total">${fmt(metradoManual(p))}</output> ${esc(p.und || '')}</b></div>
+    <div class="acciones">
+      <button type="button" class="secundario chico" data-act="det-agregar">${icono('mas')} Agregar fila</button>
+      <button type="button" class="secundario chico" data-act="det-agregar" data-material="1">${icono('mas')} Agregar accesorio (va al pedido)</button>
+    </div>
+    <p class="nota">Parcial = N° veces × las medidas que llenes (vacías no cuentan). Veces negativas descuentan. Marca <b>Va al pedido</b> en codos, tees y demás accesorios: salen en la lista de pedido con su propia cantidad.</p>`;
+}
+
 function manualHTML(el) {
   const p = el.partidas.manual;
   const base = 'partidas.manual';
   const cu = p.cuadrilla || {};
-  const mats = (p.materiales || []).map((x, i) => `<div class="fila-rep"><div class="rejilla">
-      ${campo('Material', `${base}.materiales.${i}.nombre`, x.nombre, { texto: true })}
-      ${campo('Und', `${base}.materiales.${i}.und`, x.und, { texto: true })}
-      ${campo('Cantidad por unidad', `${base}.materiales.${i}.porUnidad`, x.porUnidad)}
-    </div><button type="button" class="quitar" data-act="mat-quitar" data-i="${i}">Quitar material</button></div>`).join('');
+  // Subtítulos sugeridos: los del catálogo de esa especialidad y los ya usados en el proyecto.
+  const sugeridos = new Set(SUBTEMAS[el.especialidad] || []);
+  proyecto().elementos.filter((e) => e.especialidad === el.especialidad && e.grupo).forEach((e) => sugeridos.add(e.grupo));
+  const espOps = Object.entries(ESPECIALIDADES).map(([k, e]) => `<option value="${k}"${k === el.especialidad ? ' selected' : ''}>${esc(e.nombre)} (${esc(e.codigo)})</option>`).join('');
+  const mats = (p.materiales || []).map((x, i) => `<div class="fila-mat">
+      ${campo('Material', `${base}.materiales.${i}.nombre`, x.nombre, { texto: true, placeholder: 'Cemento, tubo PVC…' })}
+      ${campo('Unidad', `${base}.materiales.${i}.und`, x.und, { texto: true })}
+      ${campo(`Por cada ${p.und || 'und'}`, `${base}.materiales.${i}.porUnidad`, x.porUnidad)}
+      <button type="button" class="quitar-ico" data-act="mat-quitar" data-i="${i}" aria-label="Quitar ${esc(x.nombre || 'material')}">${icono('borrar')}</button>
+    </div>`).join('');
+  const yaGuardada = (S.misPartidas || []).some((x) => x.esp === el.especialidad && x.nombre === el.nombre);
   return `<div class="partida-ctrl">${check('Incluir', `${base}.activa`, p.activa !== false, true)}${check('Ejecutada', `${base}.ejecutado`, p.ejecutado)}</div>
-    <div class="rejilla">
-      ${campo('Unidad', `${base}.und`, p.und, { texto: true, placeholder: 'm², m³, und, glb' })}
-      ${campo('Metrado (por elemento)', `${base}.cantidad`, p.cantidad)}
-      ${campo('Rendimiento (und/día)', `${base}.rend`, p.rend)}
-      ${campo('N° de cuadrillas', `${base}.cuadrillas`, p.cuadrillas)}
-    </div>
-    <h4>Cuadrilla</h4>
-    <div class="rejilla">${CATEGORIAS.map((k) => campo(NOMBRE_CATEGORIA[k], `${base}.cuadrilla.${k}`, cu[k])).join('')}</div>
-    <h4>Materiales (opcional)</h4>${mats}
-    <button type="button" class="secundario chico" data-act="mat-agregar">Agregar material</button>
-    <section class="resultado" id="res-manual" aria-live="polite">${resultadoPartida(el, 'manual')}</section>`;
+    <section class="caja">
+      <h4>Ubicación en el metrado</h4>
+      <div class="rejilla rejilla-ancha">
+        <label class="campo" for="f-esp"><span>Especialidad</span><select id="f-esp" data-act="cambiar-esp">${espOps}</select></label>
+        <label class="campo" for="f-grupo"><span>Subtema (${esc(codigoSubtema(el.especialidad, subtemaDe(el), proyecto().elementos))})</span><input id="f-grupo" type="text" list="grupos-sug" data-k="grupo" value="${esc(el.grupo || '')}" placeholder="${esc(TIPOS[el.tipo].plural)}"></label>
+        <datalist id="grupos-sug">${[...sugeridos].map((g) => `<option value="${esc(g)}">`).join('')}</datalist>
+      </div>
+    </section>
+    <section class="caja">
+      <h4>Metrado</h4>
+      <div class="segmento" role="group" aria-label="Cómo se metra">
+        <button type="button" data-act="metrado-modo" data-v="valor" aria-pressed="${!usaDetalle(p)}">Un solo valor</button>
+        <button type="button" data-act="metrado-modo" data-v="detalle" aria-pressed="${usaDetalle(p)}">Detalle por filas</button>
+      </div>
+      <div class="rejilla">
+        ${campo('Unidad', `${base}.und`, p.und, { texto: true, placeholder: 'm², m³, m, pto, und, glb' })}
+        ${usaDetalle(p) ? '' : campo('Metrado (por elemento)', `${base}.cantidad`, p.cantidad)}
+      </div>
+      ${usaDetalle(p) ? detalleHTML(p) : '<p class="nota">Si el metrado sale de varias partes (accesorios, muros, ambientes), usa <b>Detalle por filas</b>. Si hay varios iguales, pon la cantidad en “×” junto al nombre.</p>'}
+    </section>
+    <section class="caja">
+      <h4>Rendimiento y cuadrilla</h4>
+      <div class="rejilla">
+        ${campo(`Rendimiento (${p.und || 'und'}/día)`, `${base}.rend`, p.rend)}
+        ${campo('N° de cuadrillas', `${base}.cuadrillas`, p.cuadrillas)}
+        ${CATEGORIAS.map((k) => campo(NOMBRE_CATEGORIA[k], `${base}.cuadrilla.${k}`, cu[k])).join('')}
+      </div>
+    </section>
+    <section class="caja">
+      <h4>Materiales por unidad <small>(opcional)</small></h4>
+      ${mats || '<p class="nota">Sin materiales. Agrega los que quieras que salgan en el pedido.</p>'}
+      <button type="button" class="secundario chico" data-act="mat-agregar">${icono('mas')} Agregar material</button>
+    </section>
+    <section class="resultado" id="res-manual" aria-live="polite">${resultadoPartida(el, 'manual')}</section>
+    <div class="caja caja-mia">
+      <p class="nota">${yaGuardada ? 'Esta partida ya está en Mis partidas; guárdala otra vez para actualizarla.' : 'Guárdala en Mis partidas para usarla en otros proyectos (aparece al inicio del catálogo).'}</p>
+      <button type="button" class="secundario chico" data-act="mia-guardar">${icono('estrella')} ${yaGuardada ? 'Actualizar en Mis partidas' : 'Guardar en Mis partidas'}</button>
+    </div>`;
 }
 
 function hayCambios() {
@@ -824,6 +992,11 @@ function refrescarVivo(path) {
   }
   const res = $(`#res-${tab}`);
   if (res) res.innerHTML = resultadoPartida(el, tab);
+  if (tab === 'manual' && usaDetalle(el.partidas.manual)) {
+    el.partidas.manual.detalle.forEach((f, i) => { const o = $(`#det-parcial-${i}`); if (o) o.textContent = fmt(parcialFila(f)); });
+    const t = $('#det-total');
+    if (t) t.textContent = fmt(metradoManual(el.partidas.manual));
+  }
   const m = /^partidas\.acero\.armado\.(\d+)\./.exec(path || '');
   if (tab === 'acero') {
     const res2 = $('#acero-resumen');
@@ -870,20 +1043,82 @@ function guardarEditor() {
 function nombreNuevo(tipo) {
   const pref = TIPOS[tipo].pref;
   const usados = proyecto().elementos.filter((e) => e.tipo === tipo).length;
-  return tipo === 'manual' ? 'Nueva partida' : `${pref}-${usados + 1}`;
+  return esLibre(tipo) ? 'Nueva partida' : `${pref}-${usados + 1}`;
 }
 
-function crearElemento(tipo) {
-  const el = nuevoElemento(tipo, nombreNuevo(tipo), uid());
+// tipo: elemento con figura o partida en blanco; plantilla: partida del catálogo o de Mis partidas.
+function crearElemento(tipo, plantilla = null, grupo = '') {
+  const el = plantilla ? nuevaDesdePlantilla(plantilla, uid()) : nuevoElemento(tipo, nombreNuevo(tipo), uid());
+  if (grupo && esLibre(el.tipo)) el.grupo = grupo;
   const pr = proyecto();
   pr.elementos.push(el);
+  // Si el proyecto tenía especialidades elegidas, que aparezca la de esta partida.
+  const elegidas = pr.datos?.especialidades;
+  if (Array.isArray(elegidas) && !elegidas.includes(el.especialidad)) elegidas.push(el.especialidad);
   ui.cerrados.delete(`esp:${el.especialidad}`);
-  ui.cerrados.delete(`grp:${tipo}`);
+  ui.cerrados.delete(`grp:${el.tipo}`);
+  ui.cerrados.delete(`sub:${el.especialidad}:${subtemaDe(el)}`);
   guardarPlegado();
   persistir();
   render();
   abrirEditor(el.id);
   ui.editor.nuevo = true;
+}
+
+// ---------- datos del proyecto (al crear y al editar) ----------
+const CAMPOS_PROYECTO = [
+  ['propietario', 'Propietario / cliente', 'Nombre o razón social'],
+  ['ubicacion', 'Ubicación', 'Dirección, distrito, provincia, región'],
+  ['responsable', 'Ingeniero residente / responsable', 'Nombre y CIP'],
+  ['inicio', 'Fecha de inicio', '', 'date'],
+  ['plazo', 'Plazo de ejecución (días)', 'Ej. 90', 'number'],
+  ['descripcion', 'Descripción de la obra', 'Ej. vivienda de 2 pisos, albañilería confinada'],
+];
+
+function formProyecto(p) {
+  const d = p?.datos || {};
+  const elegidas = Array.isArray(d.especialidades) ? d.especialidades : Object.keys(ESPECIALIDADES);
+  const nuevo = !p;
+  return `<form class="form-proyecto" id="form-proyecto" autocomplete="off" data-id="${p ? p.id : ''}">
+    <div class="flot-cab"><h3>${icono('proyectos')} ${nuevo ? 'Nuevo proyecto' : 'Datos del proyecto'}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>
+    <p class="nota">Estos datos salen en el informe y en el PDF. Solo el nombre es obligatorio; los demás puedes completarlos después.</p>
+    <label class="campo ancho" for="fp-nombre"><span>Nombre de la obra *</span><input id="fp-nombre" required value="${esc(p?.nombre || '')}" placeholder="Ej. Vivienda unifamiliar Sr. Pérez"></label>
+    <div class="rejilla">
+      ${CAMPOS_PROYECTO.map(([k, label, ph, tipo]) => `<label class="campo${k === 'descripcion' || k === 'ubicacion' ? ' ancho' : ''}" for="fp-${k}"><span>${esc(label)}</span><input id="fp-${k}" data-dp="${k}" type="${tipo || 'text'}"${tipo === 'number' ? ' inputmode="numeric" min="0"' : ''} value="${esc(d[k] || '')}" placeholder="${esc(ph)}"></label>`).join('')}
+    </div>
+    <fieldset class="esp-elegir"><legend>Especialidades que vas a metrar</legend>
+      ${Object.entries(ESPECIALIDADES).map(([k, e]) => `<label class="check"><input type="checkbox" data-esp-elegida="${k}"${elegidas.includes(k) ? ' checked' : ''}><span><b>${esc(e.codigo)}</b> ${esc(e.nombre)}</span></label>`).join('')}
+    </fieldset>
+    <div class="acciones">
+      <button type="submit" class="primario">${nuevo ? 'Crear proyecto' : 'Guardar datos'}</button>
+      <button type="button" class="secundario" data-act="cerrar-flotante">Cancelar</button>
+    </div>
+  </form>`;
+}
+
+function guardarFormProyecto() {
+  const f = $('#form-proyecto');
+  if (!f) return;
+  const nombre = $('#fp-nombre', f).value.trim();
+  if (!nombre) { $('#fp-nombre', f).focus(); aviso('Escribe el nombre de la obra'); return; }
+  const datos = {};
+  f.querySelectorAll('[data-dp]').forEach((i) => { if (i.value.trim()) datos[i.dataset.dp] = i.value.trim(); });
+  datos.especialidades = [...f.querySelectorAll('[data-esp-elegida]:checked')].map((i) => i.dataset.espElegida);
+  if (!datos.especialidades.length) datos.especialidades = Object.keys(ESPECIALIDADES);
+  let p = S.proyectos.find((x) => x.id === f.dataset.id);
+  if (p) {
+    p.nombre = nombre;
+    p.datos = datos;
+    persistir(); cerrarFlotante(); render();
+    aviso('Datos del proyecto guardados');
+    return;
+  }
+  p = { id: uid(), nombre, datos, creado: new Date().toISOString(), elementos: [], registros: [], seleccion: { excluidos: {}, modo: 'todo' } };
+  S.proyectos.push(p);
+  S.actual = p.id;
+  ui.obraForm = null;
+  persistir(); cerrarFlotante(); ir('partidas');
+  aviso(`Proyecto “${nombre}” creado`);
 }
 
 // ---------- ventana flotante ----------
@@ -1180,12 +1415,27 @@ function vistaTablas() {
         ${campoTabla('Escala CAD (medida ÷ factor)', 'acero.escalaCAD')}
       </div>
     </details>
+    ${seccionMisPartidas()}
     <details class="seccion-tabla" open><summary>Costo de hora-hombre (S/)</summary>
       <div class="rejilla">${CATEGORIAS.map((c) => campoTabla(NOMBRE_CATEGORIA[c], `costoHH.${c}`)).join('')}</div>
     </details>
     <div class="acciones">
       <button type="button" class="peligro" data-act="restaurar">${ui.confirmar === 'tablas' ? 'Toca otra vez para restaurar' : 'Restaurar valores CAPECO'}</button>
     </div>`;
+}
+
+// Partidas que el usuario guardó para reusar (se guardan con sus datos, no con el proyecto).
+function seccionMisPartidas() {
+  const lista = S.misPartidas || [];
+  const filas = lista.map((x, i) => `<li class="mia-fila">
+      <div class="mia-txt"><b>${esc(x.nombre)}</b><small>${esc(ESPECIALIDADES[x.esp]?.nombre || '')}${x.grupo ? ` · ${esc(x.grupo)}` : ''} · ${esc(x.und)} · ${fmt(num(x.rend), 1)} ${esc(x.und)}/día · ${(x.materiales || []).length} materiales</small></div>
+      <button type="button" class="${ui.confirmar === `mia:${i}` ? 'peligro' : 'secundario'} chico" data-act="mia-borrar" data-i="${i}">${ui.confirmar === `mia:${i}` ? 'Confirmar' : 'Quitar'}</button>
+    </li>`).join('');
+  return `<details class="seccion-tabla"${lista.length ? ' open' : ''}><summary>${icono('estrella')} Mis partidas (${lista.length})</summary>
+    <p class="nota">Para crear una: Partidas › Agregar › “Crear una partida nueva”, llénala y toca “Guardar en Mis partidas”. Luego aparece en el catálogo de su especialidad para cualquier proyecto.</p>
+    ${filas ? `<ul class="lista-mias">${filas}</ul>` : ''}
+    <button type="button" class="secundario chico" data-act="selector">${icono('mas')} Crear o elegir una partida</button>
+  </details>`;
 }
 
 // ---------- vista Proyectos ----------
@@ -1207,14 +1457,21 @@ function avisoRedLocal() {
 }
 
 function vistaProyectos() {
-  const items = S.proyectos.map((p) => `<li class="proyecto${p.id === S.actual ? ' activo' : ''}">
-      <input aria-label="Nombre del proyecto" class="nombre-proyecto" data-renombrar="${p.id}" value="${esc(p.nombre)}">
-      <span class="meta">${p.elementos.length} elementos · ${p.registros.length} registros de obra</span>
+  const items = S.proyectos.map((p) => {
+    const d = p.datos || {};
+    const filas = [['Propietario', d.propietario], ['Ubicación', d.ubicacion], ['Responsable', d.responsable],
+      ['Inicio', d.inicio ? new Date(`${d.inicio}T00:00`).toLocaleDateString('es-PE') : ''], ['Plazo', d.plazo ? `${d.plazo} días` : '']].filter(([, v]) => v);
+    return `<li class="proyecto${p.id === S.actual ? ' activo' : ''}">
+      <textarea aria-label="Nombre del proyecto" class="nombre-proyecto" rows="1" data-renombrar="${p.id}">${esc(p.nombre)}</textarea>
+      ${filas.length ? `<dl class="datos-proyecto">${filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : '<p class="nota">Sin datos de obra (propietario, ubicación, residente…).</p>'}
+      <span class="meta">${p.elementos.length} partidas · ${p.registros.length} registros de obra</span>
       <div class="acciones-fila">
         ${p.id === S.actual ? '<span class="chip">Abierto</span>' : `<button type="button" class="secundario" data-act="abrir" data-id="${p.id}">Abrir</button>`}
+        <button type="button" class="secundario" data-act="datos-proyecto" data-id="${p.id}">${icono('editar')} ${filas.length ? 'Datos' : 'Completar datos'}</button>
         <button type="button" class="secundario" data-act="duplicar-proyecto" data-id="${p.id}">Duplicar</button>
         <button type="button" class="peligro" data-act="borrar-proyecto" data-id="${p.id}">${ui.confirmar === p.id ? 'Confirmar' : 'Borrar'}</button>
-      </div></li>`).join('');
+      </div></li>`;
+  }).join('');
   return `<div class="cab-vista"><h2>Proyectos</h2></div>
     ${avisoRedLocal()}
     <ul class="lista-proyectos">${items}</ul>
@@ -1482,6 +1739,39 @@ function accionEditor(b) {
     case 'vano-quitar': el.partidas.muro.vanos.splice(Number(ds.i), 1); rehacerTab(); return true;
     case 'mat-agregar': (el.partidas.manual.materiales ||= []).push({ nombre: '', und: 'und', porUnidad: 1 }); rehacerTab(); return true;
     case 'mat-quitar': el.partidas.manual.materiales.splice(Number(ds.i), 1); rehacerTab(); return true;
+    case 'metrado-modo': {
+      const p = el.partidas.manual;
+      if (ds.v === 'detalle') {
+        p.detalle ||= [];
+        // Lo que ya tenía como valor único pasa a la primera fila.
+        if (!p.detalle.length) p.detalle.push(filaDetalle({ desc: 'Metrado', veces: num(p.cantidad) || '' }));
+        p.modoMetrado = 'detalle';
+      } else {
+        p.cantidad = Math.round(metradoManual(p) * 1000) / 1000;
+        p.modoMetrado = 'valor';
+      }
+      rehacerTab();
+      return true;
+    }
+    case 'det-agregar': {
+      const p = el.partidas.manual;
+      (p.detalle ||= []).push(filaDetalle(ds.material ? { material: true, veces: 1, und: 'und' } : {}));
+      rehacerTab();
+      const filas = document.querySelectorAll('.fila-det');
+      filas[filas.length - 1]?.querySelector('input')?.focus();
+      return true;
+    }
+    case 'det-quitar': el.partidas.manual.detalle.splice(Number(ds.i), 1); rehacerTab(); return true;
+    case 'mia-guardar': {
+      if (!String(el.nombre || '').trim()) { aviso('Ponle un nombre a la partida primero'); return true; }
+      const pl = plantillaDesde(el);
+      const i = S.misPartidas.findIndex((x) => x.esp === pl.esp && x.nombre === pl.nombre);
+      if (i >= 0) S.misPartidas[i] = pl; else S.misPartidas.push(pl);
+      persistir();
+      rehacerTab();
+      aviso(i >= 0 ? 'Actualizada en Mis partidas' : 'Guardada en Mis partidas');
+      return true;
+    }
     case 'zoom': abrirFlotante(`<div class="flot-cab"><h3>${esc(TIPOS[el.tipo].nombre)} · ${esc(el.nombre)}</h3><button type="button" class="cerrar" data-act="cerrar-flotante" aria-label="Cerrar">✕</button></div>${figuraElemento(el.tipo, medidas(el), el)}<p class="nota">Las letras de la figura son las mismas de los campos de medidas.</p>`, 'grande'); return true;
     case 'norma-estribos': {
       const it = el.partidas.acero.armado[Number(ds.i)];
@@ -1522,7 +1812,13 @@ document.addEventListener('click', (ev) => {
     return;
   }
   if (ds.editar) { abrirEditor(ds.editar, ds.tab); return; }
-  if (ds.nuevo) { cerrarFlotante(); crearElemento(ds.nuevo); return; }
+  if (ds.nuevo) { cerrarFlotante(); crearElemento(ds.nuevo, null, ds.grupo || ''); return; }
+  if (ds.plantilla) {
+    const [origen, i] = ds.plantilla.split(':');
+    const pl = origen === 'mia' ? S.misPartidas[Number(i)] : CATALOGO[Number(i)];
+    if (pl) { cerrarFlotante(); crearElemento(null, pl); }
+    return;
+  }
   if (ds.toggle) {
     if (ui.cerrados.has(ds.toggle)) ui.cerrados.delete(ds.toggle); else ui.cerrados.add(ds.toggle);
     guardarPlegado();
@@ -1534,7 +1830,20 @@ document.addEventListener('click', (ev) => {
 
   const pr = proyecto();
   switch (ds.act) {
-    case 'selector': abrirFlotante(selectorTipos(), 'grande'); break;
+    case 'selector': {
+      abrirFlotante(selectorTipos(ds.esp || null, ds.grupo || null), 'grande');
+      // En el celular no abrir el teclado de golpe; en PC sí, para buscar al toque.
+      if (window.matchMedia('(min-width: 800px)').matches) $('#buscar-partida')?.focus();
+      break;
+    }
+    case 'datos-proyecto': abrirFlotante(formProyecto(S.proyectos.find((p) => p.id === ds.id)), 'grande'); break;
+    case 'mia-borrar': {
+      const i = Number(ds.i);
+      if (ui.confirmar !== `mia:${i}`) { ui.confirmar = `mia:${i}`; render(); break; }
+      S.misPartidas.splice(i, 1);
+      ui.confirmar = null; persistir(); render(); aviso('Partida quitada de Mis partidas');
+      break;
+    }
     case 'guia': abrirFlotante(guiaHTML(S.tablas, ds.pestana || ui.guiaPestana || 'concreto'), 'grande'); ui.guiaPestana = ds.pestana || ui.guiaPestana; break;
     case 'tema': cambiarTema(); break;
     case 'calc': abrirCalculadora(); break;
@@ -1544,6 +1853,9 @@ document.addEventListener('click', (ev) => {
     case 'contraer':
       Object.keys(ESPECIALIDADES).forEach((k) => ui.cerrados.add(`esp:${k}`));
       Object.keys(TIPOS).forEach((k) => ui.cerrados.add(`grp:${k}`));
+      for (const ek of Object.keys(ESPECIALIDADES)) {
+        gruposEspecialidad(pr.elementos.filter((e) => e.especialidad === ek), ek).forEach((g) => ui.cerrados.add(g.k));
+      }
       guardarPlegado();
       render();
       break;
@@ -1627,11 +1939,8 @@ document.addEventListener('click', (ev) => {
       ui.confirmar = null; persistir(); render(); aviso('Proyecto borrado');
       break;
     case 'nuevo-proyecto': {
-      const p = { id: uid(), nombre: `Proyecto ${S.proyectos.length + 1}`, creado: new Date().toISOString(), elementos: [], registros: [], seleccion: { excluidos: {}, modo: 'todo' } };
-      S.proyectos.push(p);
-      S.actual = p.id;
-      ui.obraForm = null;
-      persistir(); ir('partidas');
+      abrirFlotante(formProyecto(null), 'grande');
+      $('#fp-nombre')?.focus();
       break;
     }
     case 'restaurar':
@@ -1695,6 +2004,10 @@ document.addEventListener('click', (ev) => {
 $('#flotante').addEventListener('click', (ev) => { if (ev.target.id === 'flotante') cerrarFlotante(); });
 $('#hoja').addEventListener('cancel', (ev) => { ev.preventDefault(); cerrarEditor(); });
 
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && ev.target.matches('textarea.nombre-el, textarea.nombre-proyecto')) { ev.preventDefault(); ev.target.blur(); }
+});
+
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   if ('num' in el.dataset) {
@@ -1702,6 +2015,7 @@ document.addEventListener('input', (ev) => {
     const v = el.value.trim();
     if (out) out.textContent = esExpresion(v) ? `= ${fmt(num(v), 3)}` : v && !Number.isFinite(Number(v.replace(',', '.'))) ? 'fórmula no válida' : '';
   }
+  if (el.id === 'buscar-partida') { filtrarSelector(el.value); return; }
   const pr = proyecto();
   if (el.dataset.k && ui.editor) {
     const val = 'bool' in el.dataset ? el.checked : el.value;
@@ -1751,6 +2065,11 @@ document.addEventListener('input', (ev) => {
 
 document.addEventListener('change', (ev) => {
   const el = ev.target;
+  if (el.dataset.act === 'cambiar-esp' && ui.editor) {
+    moverEspecialidad(ui.editor.draft, el.value);
+    $('#hoja-contenido').innerHTML = editorHTML();
+    return;
+  }
   if (el.dataset.act === 'cuadrilla-propia' && ui.editor) {
     const d = ui.editor.draft;
     const p = d.partidas[el.dataset.p];
@@ -1821,6 +2140,7 @@ function pintarPestanas() {
 document.addEventListener('submit', (ev) => {
   ev.preventDefault();
   if (ev.target.id === 'editor') { guardarEditor(); return; }
+  if (ev.target.id === 'form-proyecto') { guardarFormProyecto(); return; }
   if (ev.target.id === 'form-registro') {
     const pr = proyecto();
     const f = ui.obraForm;

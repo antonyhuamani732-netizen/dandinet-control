@@ -157,6 +157,7 @@ export function informeHTML(proyecto, T, { secciones, elevacion }) {
     <header class="inf-cab">
       <p class="inf-eyebrow">Informe de metrado · ${esc(new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' }))}</p>
       <h2>${esc(proyecto.nombre)}</h2>
+      ${datosObraHTML(proyecto.datos)}
       <p class="nota">${proyecto.seleccion?.modo === 'pendiente' ? 'Solo lo que falta ejecutar' : 'Partidas elegidas en Resumen'} · ${s.filas.length} partidas</p>
       <div class="cifras grandes">
         <div><span>Acero</span><b>${f(kg, 0)} kg</b><small>${varillas} varillas</small></div>
@@ -172,11 +173,23 @@ export function informeHTML(proyecto, T, { secciones, elevacion }) {
   </article>`;
 }
 
+// Datos generales de la obra (los que el usuario llenó al crear el proyecto).
+function datosObra(d = {}) {
+  return [['Propietario', d.propietario], ['Ubicación', d.ubicacion], ['Residente', d.responsable],
+    ['Inicio', d.inicio ? new Date(`${d.inicio}T00:00`).toLocaleDateString('es-PE') : ''], ['Plazo', d.plazo ? `${d.plazo} días` : ''],
+    ['Obra', d.descripcion]].filter(([, v]) => v);
+}
+
+function datosObraHTML(d) {
+  const filas = datosObra(d);
+  return filas.length ? `<dl class="inf-datos">${filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : '';
+}
+
 // Resumen en texto para compartir por WhatsApp u otra app.
 export function informeTexto(proyecto, T) {
   const s = resumen(proyecto, T, proyecto.seleccion);
   const D = T.acero.diametros;
-  const L = [`*${proyecto.nombre}*`, `Informe de metrado · ${new Date().toLocaleDateString('es-PE')}`, '', '*Pedido de acero*'];
+  const L = [`*${proyecto.nombre}*`, ...datosObra(proyecto.datos).map(([k, v]) => `${k}: ${v}`), `Informe de metrado · ${new Date().toLocaleDateString('es-PE')}`, '', '*Pedido de acero*'];
   for (const [d, c] of Object.entries(s.corte)) L.push(`• Ø ${D[d].nombre}: ${c.varillas} varillas de ${T.acero.longitudVarilla} m (${f(s.kgPorDiam[d])} kg)`);
   const otros = s.materiales.filter((m) => !m.clave.startsWith('acero_'));
   if (otros.length) {

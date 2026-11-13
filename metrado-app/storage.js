@@ -26,7 +26,11 @@ function normalizarProyecto(p) {
   p.registros ||= [];
   p.seleccion ||= { excluidos: {}, modo: 'todo' };
   p.seleccion.excluidos ||= {};
+  // Datos generales de la obra (propietario, ubicación…). Proyectos antiguos no los tienen.
+  p.datos ||= {};
   for (const el of p.elementos) {
+    // Elementos de especialidades que ya no existen pasan a "Otras partidas".
+    if (!TIPOS[el.tipo]) { el.tipo = 'manual'; el.especialidad = 'otras'; }
     const a = el.partidas?.acero;
     if (a && (a.recCm === undefined || a.recCm === '')) {
       const conRec = (a.armado || []).find((it) => it.rec !== undefined && it.rec !== '');
@@ -105,6 +109,7 @@ export function cargar(ejemplo) {
     datos = { version: VERSION_TABLAS, actual: p.id, proyectos: [p], tablas: null };
   }
   datos.proyectos.forEach(normalizarProyecto);
+  if (!Array.isArray(datos.misPartidas)) datos.misPartidas = [];
   datos.tablas = fusionar(structuredClone(DEFAULTS), datos.tablas || {});
   if (!datos.proyectos.some((p) => p.id === datos.actual)) datos.actual = datos.proyectos[0]?.id;
   return datos;
@@ -128,6 +133,7 @@ export function importar(texto) {
   if (!d || !Array.isArray(d.proyectos)) throw new Error('El archivo no es un respaldo de Metrado CAPECO');
   if (d.proyectos.some((p) => Array.isArray(p.partidas) && !p.elementos)) d = migrarV1(d);
   d.proyectos.forEach(normalizarProyecto);
+  if (!Array.isArray(d.misPartidas)) d.misPartidas = [];
   d.tablas = fusionar(structuredClone(DEFAULTS), d.tablas || {});
   if (!d.proyectos.some((p) => p.id === d.actual)) d.actual = d.proyectos[0]?.id;
   return d;

@@ -1,10 +1,77 @@
 // Catálogo de elementos: medidas (una sola vez), partidas que admite y armado típico.
 
+// Orden de la Norma Técnica de Metrados: OE.2 Estructuras … OE.5 Instalaciones eléctricas.
 export const ESPECIALIDADES = {
   estructuras: { nombre: 'Estructuras', codigo: 'OE.2' },
   arquitectura: { nombre: 'Arquitectura', codigo: 'OE.3' },
+  sanitarias: { nombre: 'Instalaciones sanitarias', codigo: 'OE.4' },
+  electricas: { nombre: 'Instalaciones eléctricas', codigo: 'OE.5' },
   otras: { nombre: 'Otras partidas', codigo: 'OE.X' },
 };
+
+// Tipo de "partida libre" (unidad, metrado, rendimiento y materiales a mano) de cada especialidad.
+export const LIBRE_POR_ESP = {
+  estructuras: 'libre_est',
+  arquitectura: 'libre_arq',
+  sanitarias: 'libre_san',
+  electricas: 'libre_ele',
+  otras: 'manual',
+};
+export const esLibre = (tipo) => !!TIPOS[tipo]?.libre;
+
+// Subtemas de cada especialidad en el orden de la Norma Técnica de Metrados.
+// El código sale de la posición: OE.2.1, OE.2.2… Los subtemas propios del usuario van al final.
+export const SUBTEMAS = {
+  estructuras: ['Obras preliminares', 'Movimiento de tierras', 'Concreto simple', 'Concreto armado'],
+  arquitectura: ['Muros y tabiques de albañilería', 'Revoques y enlucidos', 'Cielorrasos', 'Pisos y pavimentos', 'Zócalos y contrazócalos', 'Carpintería', 'Vidrios', 'Pintura'],
+  sanitarias: ['Aparatos sanitarios', 'Salidas de agua', 'Redes de agua', 'Salidas de desagüe', 'Redes de desagüe', 'Accesorios de desagüe'],
+  electricas: ['Salidas', 'Canalizaciones y conductores', 'Tableros e interruptores', 'Puesta a tierra', 'Artefactos'],
+  otras: [],
+};
+
+const normal = (t) => String(t || '').trim().toLowerCase();
+
+// Subtema de un elemento: el de su tipo (columna → Concreto armado) o el que escribió el usuario.
+export function subtemaDe(el) {
+  const t = TIPOS[el.tipo];
+  if (t?.subtema) return t.subtema;
+  const g = String(el.grupo || '').trim();
+  if (!g) return t?.plural || 'Otras partidas';
+  // Si coincide con uno de la lista (sin importar mayúsculas), se usa el nombre de la lista.
+  return (SUBTEMAS[el.especialidad] || []).find((x) => normal(x) === normal(g)) || g;
+}
+
+// Subtemas presentes de una especialidad, ordenados y con su código: [{ codigo, nombre, els }].
+export function subtemasEspecialidad(esp, elementos) {
+  const lista = SUBTEMAS[esp] || [];
+  const mapa = new Map();
+  for (const el of elementos) {
+    if (el.especialidad !== esp) continue;
+    const n = subtemaDe(el);
+    if (!mapa.has(n)) mapa.set(n, []);
+    mapa.get(n).push(el);
+  }
+  const propios = [...mapa.keys()].filter((n) => !lista.includes(n));
+  const cod = ESPECIALIDADES[esp].codigo;
+  const out = [];
+  lista.forEach((n, i) => { if (mapa.has(n)) out.push({ codigo: `${cod}.${i + 1}`, nombre: n, els: ordenarPorTipo(mapa.get(n)) }); });
+  propios.forEach((n, i) => out.push({ codigo: `${cod}.${lista.length + i + 1}`, nombre: n, els: ordenarPorTipo(mapa.get(n)) }));
+  return out;
+}
+
+// Código de un subtema por nombre (aunque aún no tenga partidas).
+export function codigoSubtema(esp, nombre, elementos = []) {
+  const s = subtemasEspecialidad(esp, elementos).find((x) => x.nombre === nombre);
+  if (s) return s.codigo;
+  const i = (SUBTEMAS[esp] || []).indexOf(nombre);
+  return i >= 0 ? `${ESPECIALIDADES[esp].codigo}.${i + 1}` : ESPECIALIDADES[esp].codigo;
+}
+
+// Dentro de un subtema: primero por tipo (zapatas, columnas, vigas…) y luego en el orden en que se agregaron.
+function ordenarPorTipo(els) {
+  const orden = Object.keys(TIPOS);
+  return els.map((e, i) => [e, i]).sort((a, b) => (orden.indexOf(a[0].tipo) - orden.indexOf(b[0].tipo)) || (a[1] - b[1])).map(([e]) => e);
+}
 
 export const PARTIDAS = {
   concreto: { nombre: 'Concreto', und: 'm³' },
@@ -20,19 +87,19 @@ const d = (k, label, def) => ({ k, label, def });
 // planta: largo en X y en Y para las mallas de acero.
 export const TIPOS = {
   cimiento: {
-    esp: 'estructuras', nombre: 'Cimiento corrido', plural: 'Cimientos corridos', pref: 'CC',
+    subtema: 'Concreto simple', esp: 'estructuras', nombre: 'Cimiento corrido', plural: 'Cimientos corridos', pref: 'CC',
     dims: [d('L', 'Largo', 10), d('B', 'Ancho', 0.4), d('h', 'Alto', 0.8)],
     partidas: ['concreto'], mezcla: 'ciclopeo',
     conc: (m) => [m.L, m.B, m.h],
   },
   sobrecimiento: {
-    esp: 'estructuras', nombre: 'Sobrecimiento', plural: 'Sobrecimientos', pref: 'SC',
+    subtema: 'Concreto simple', esp: 'estructuras', nombre: 'Sobrecimiento', plural: 'Sobrecimientos', pref: 'SC',
     dims: [d('L', 'Largo', 10), d('B', 'Ancho', 0.15), d('h', 'Alto', 0.3)],
     partidas: ['concreto', 'encofrado'], mezcla: 'ciclopeo',
     conc: (m) => [m.L, m.B, m.h], enc: (m) => [m.L, m.h],
   },
   zapata: {
-    esp: 'estructuras', nombre: 'Zapata', plural: 'Zapatas', pref: 'Z',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Zapata', plural: 'Zapatas', pref: 'Z',
     dims: [d('A', 'Largo A', 1.5), d('B', 'Ancho B', 1.5), d('h', 'Peralte h', 0.6)],
     partidas: ['concreto', 'encofrado', 'acero'], inactivas: ['encofrado'], mezcla: '210', rec: 7.5,
     conc: (m) => [m.A, m.B, m.h], enc: (m) => [m.A, m.B, m.h], planta: (m) => ({ X: m.A, Y: m.B }),
@@ -42,7 +109,7 @@ export const TIPOS = {
     ],
   },
   columna: {
-    esp: 'estructuras', nombre: 'Columna', plural: 'Columnas', pref: 'C',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Columna', plural: 'Columnas', pref: 'C',
     dims: [d('b', 'Lado b', 0.25), d('h', 'Lado h', 0.25), d('H', 'Altura H', 2.8)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210',
     conc: (m) => [m.b, m.h, m.H], enc: (m) => [m.b, m.h, m.H], criterio: 'E060', rec: 4,
@@ -54,7 +121,7 @@ export const TIPOS = {
     ],
   },
   viga: {
-    esp: 'estructuras', nombre: 'Viga', plural: 'Vigas', pref: 'V',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Viga', plural: 'Vigas', pref: 'V',
     dims: [d('b', 'Base b', 0.25), d('h', 'Peralte h', 0.4), d('L', 'Luz libre L', 4), d('e', 'Espesor de losa e', 0.2)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', clase: 'peraltada', criterio: 'E060', rec: 4,
     conc: (m) => [m.b, m.h, m.L], enc: (m) => [m.b, m.h, m.L, m.e],
@@ -62,7 +129,7 @@ export const TIPOS = {
     armado: (m, el = {}) => armadoViga(m, el.clase),
   },
   placa: {
-    esp: 'estructuras', nombre: 'Placa', plural: 'Placas', pref: 'PL',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Placa', plural: 'Placas', pref: 'PL',
     dims: [d('L', 'Longitud L', 2), d('e', 'Espesor e', 0.2), d('H', 'Altura H', 2.8)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
     conc: (m) => [m.L, m.e, m.H], enc: (m) => [m.L, m.H], planta: (m) => ({ X: m.L, Y: m.H }),
@@ -72,7 +139,7 @@ export const TIPOS = {
     ],
   },
   losa_maciza: {
-    esp: 'estructuras', nombre: 'Losa maciza', plural: 'Losas macizas', pref: 'LM',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Losa maciza', plural: 'Losas macizas', pref: 'LM',
     dims: [d('A', 'Largo A', 5), d('B', 'Ancho B', 4), d('e', 'Espesor e', 0.15)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
     conc: (m) => [m.A, m.B, m.e], enc: (m) => [m.A, m.B], planta: (m) => ({ X: m.A, Y: m.B }),
@@ -82,7 +149,7 @@ export const TIPOS = {
     ],
   },
   losa_aligerada: {
-    esp: 'estructuras', nombre: 'Losa aligerada', plural: 'Losas aligeradas', pref: 'LA',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Losa aligerada', plural: 'Losas aligeradas', pref: 'LA',
     dims: [d('A', 'Luz A (dirección de viguetas)', 4), d('B', 'Ancho B', 5)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', peralte: '20', rec: 2,
     conc: (m) => [m.A, m.B], enc: (m) => [m.A, m.B], planta: (m) => ({ X: m.A, Y: m.B }),
@@ -96,7 +163,7 @@ export const TIPOS = {
     },
   },
   escalera: {
-    esp: 'estructuras', nombre: 'Escalera', plural: 'Escaleras', pref: 'E',
+    subtema: 'Concreto armado', esp: 'estructuras', nombre: 'Escalera', plural: 'Escaleras', pref: 'E',
     dims: [d('B', 'Ancho B', 1), d('L', 'Longitud inclinada L', 3.2), d('t', 'Garganta t', 0.15),
       d('np', 'N° de pasos', 10), d('p', 'Paso p', 0.25), d('cp', 'Contrapaso cp', 0.175)],
     partidas: ['concreto', 'encofrado', 'acero'], mezcla: '210', rec: 2,
@@ -107,14 +174,29 @@ export const TIPOS = {
     ],
   },
   muro: {
-    esp: 'arquitectura', nombre: 'Muro de albañilería', plural: 'Muros de albañilería', pref: 'M',
+    subtema: 'Muros y tabiques de albañilería', esp: 'arquitectura', nombre: 'Muro de albañilería', plural: 'Muros de albañilería', pref: 'M',
     dims: [d('L', 'Largo L', 5), d('H', 'Alto H', 2.6)],
     partidas: ['muro'],
   },
+  libre_est: {
+    esp: 'estructuras', nombre: 'Partida de estructuras', plural: 'Otras partidas de estructuras', pref: 'P',
+    dims: [], partidas: ['manual'], libre: true,
+  },
+  libre_arq: {
+    esp: 'arquitectura', nombre: 'Partida de arquitectura', plural: 'Otras partidas de arquitectura', pref: 'P',
+    dims: [], partidas: ['manual'], libre: true,
+  },
+  libre_san: {
+    esp: 'sanitarias', nombre: 'Partida sanitaria', plural: 'Partidas sanitarias', pref: 'P',
+    dims: [], partidas: ['manual'], libre: true,
+  },
+  libre_ele: {
+    esp: 'electricas', nombre: 'Partida eléctrica', plural: 'Partidas eléctricas', pref: 'P',
+    dims: [], partidas: ['manual'], libre: true,
+  },
   manual: {
     esp: 'otras', nombre: 'Partida manual', plural: 'Partidas manuales', pref: 'P',
-    dims: [],
-    partidas: ['manual'],
+    dims: [], partidas: ['manual'], libre: true,
   },
 };
 
@@ -187,5 +269,54 @@ export function nuevoElemento(tipo, nombre, id) {
       materiales: [],
     });
   }
+  return el;
+}
+
+// Partida libre creada desde el catálogo o desde "Mis partidas".
+// pl = { esp, grupo, nombre, und, rend, cuadrilla, materiales }
+export function nuevaDesdePlantilla(pl, id) {
+  const tipo = LIBRE_POR_ESP[pl.esp] || 'manual';
+  const el = nuevoElemento(tipo, pl.nombre || 'Nueva partida', id);
+  if (pl.grupo) el.grupo = pl.grupo;
+  Object.assign(el.partidas.manual, {
+    und: pl.und || 'und',
+    cantidad: 0,
+    rend: pl.rend ?? 10,
+    cuadrilla: { capataz: 0, operario: 0, oficial: 0, peon: 0, ...(pl.cuadrilla || {}) },
+    materiales: (pl.materiales || []).map((x) => ({ nombre: x.nombre, und: x.und, porUnidad: x.porUnidad })),
+  });
+  if (pl.detalle?.length) {
+    el.partidas.manual.modoMetrado = 'detalle';
+    el.partidas.manual.detalle = pl.detalle.map(filaDetalle);
+  }
+  return el;
+}
+
+// Convierte una partida libre del proyecto en plantilla para "Mis partidas".
+export function plantillaDesde(el) {
+  const p = el.partidas.manual;
+  return {
+    esp: el.especialidad,
+    grupo: el.grupo || '',
+    nombre: el.nombre,
+    und: p.und || 'und',
+    rend: p.rend,
+    cuadrilla: { ...(p.cuadrilla || {}) },
+    materiales: (p.materiales || []).filter((x) => x.nombre).map((x) => ({ nombre: x.nombre, und: x.und, porUnidad: x.porUnidad })),
+    // Se guardan las filas del detalle (con sus cantidades) para reusarlas como lista de accesorios.
+    ...(p.modoMetrado === 'detalle' && p.detalle?.length ? { detalle: p.detalle.filter((f) => String(f.desc || '').trim()).map(filaDetalle) } : {}),
+  };
+}
+
+// Fila del detalle de metrado: descripción, N° veces, largo, ancho, alto; "material" = va al pedido.
+export function filaDetalle(f = {}) {
+  return { desc: f.desc ?? '', veces: f.veces ?? '', largo: f.largo ?? '', ancho: f.ancho ?? '', alto: f.alto ?? '', material: !!f.material, und: f.und ?? '' };
+}
+
+// Cambia una partida libre de especialidad (sin perder sus datos).
+export function moverEspecialidad(el, esp) {
+  if (!esLibre(el.tipo) || !LIBRE_POR_ESP[esp]) return el;
+  el.tipo = LIBRE_POR_ESP[esp];
+  el.especialidad = esp;
   return el;
 }

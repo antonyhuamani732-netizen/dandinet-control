@@ -1,9 +1,9 @@
 // Service worker: guarda la app para que funcione sin internet.
 // Sube VERSION (y VERSION_APP en app.js) cada vez que publiques cambios.
-const VERSION = 'metrado-v10';
+const VERSION = 'metrado-v12';
 const ARCHIVOS = [
   './', './index.html', './styles.css', './app.js', './storage.js', './manifest.webmanifest',
-  './data/capeco.js', './data/elementos.js',
+  './data/capeco.js', './data/elementos.js', './data/catalogo.js',
   './calc/index.js', './calc/util.js', './calc/concreto.js', './calc/acero.js',
   './calc/encofrado.js', './calc/muros.js', './calc/rendimiento.js',
   './calc/elemento.js', './calc/corte.js', './calc/obra.js', './calc/norma.js',

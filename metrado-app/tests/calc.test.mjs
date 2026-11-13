@@ -339,7 +339,12 @@ test('ficha de diámetro: mm, separación mínima y uso', () => {
 test('plantilla Excel → importar sin errores', () => {
   const { proyecto, errores } = importarLibro(XLSX, ida(plantilla(XLSX, T)), T);
   assert.deepEqual(errores, []);
-  assert.equal(proyecto.elementos.length, 7);
+  assert.equal(proyecto.elementos.length, 8);
+  const toma = proyecto.elementos.find((e) => e.nombre.startsWith('Salida para tomacorriente'));
+  assert.equal(toma.especialidad, 'electricas');
+  assert.equal(toma.grupo, 'Salidas');
+  assert.ok(toma.partidas.manual.materiales.length > 0, 'trae materiales del catálogo');
+  assert.equal(proyecto.elementos.find((e) => e.nombre === 'Excavación de zanjas').especialidad, 'estructuras');
   const vp = proyecto.elementos.find((e) => e.nombre === 'VP-101');
   assert.equal(vp.partidas.acero.armado.length, 3);
   cerca(calcPartidaElemento(vp, 'acero', T).armado.detalle[0].piezas[0].long, 12.6415);
@@ -369,4 +374,112 @@ test('CSS: lo marcado con hidden se oculta aunque su clase use display flex', as
   const { readFile } = await import('node:fs/promises');
   const css = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+});
+
+// ---------- v11: especialidades, catálogo y mis partidas ----------
+import { ESPECIALIDADES, TIPOS as TIPOS11, LIBRE_POR_ESP, nuevaDesdePlantilla, plantillaDesde, moverEspecialidad, esLibre } from '../data/elementos.js';
+import { CATALOGO, agruparCatalogo } from '../data/catalogo.js';
+
+test('hay especialidades sanitarias (OE.4) y eléctricas (OE.5), cada una con su partida libre', () => {
+  assert.equal(ESPECIALIDADES.sanitarias.codigo, 'OE.4');
+  assert.equal(ESPECIALIDADES.electricas.codigo, 'OE.5');
+  for (const [esp, tipo] of Object.entries(LIBRE_POR_ESP)) {
+    assert.ok(esLibre(tipo), tipo);
+    assert.equal(TIPOS11[tipo].esp, esp);
+  }
+});
+
+test('el catálogo es válido: especialidad existente, unidad, rendimiento y cuadrilla con gente', () => {
+  assert.ok(CATALOGO.length >= 40);
+  for (const x of CATALOGO) {
+    assert.ok(ESPECIALIDADES[x.esp], x.nombre);
+    assert.ok(x.und && x.grupo, x.nombre);
+    assert.ok(x.rend > 0, x.nombre);
+    assert.ok(Object.values(x.cuadrilla).some((v) => v > 0), x.nombre);
+    for (const mt of x.materiales) assert.ok(mt.nombre && mt.und && mt.porUnidad > 0, `${x.nombre}: ${mt.nombre}`);
+  }
+  const g = agruparCatalogo(CATALOGO);
+  assert.ok(g.sanitarias['Salidas de agua'].length >= 2);
+  assert.ok(g.electricas.Salidas.length >= 8);
+});
+
+test('una salida eléctrica del catálogo calcula materiales y días', () => {
+  const pl = CATALOGO.find((x) => x.nombre === 'Salida para centro de luz (techo)');
+  const e = nuevaDesdePlantilla(pl, 'x1');
+  assert.equal(e.tipo, 'libre_ele');
+  assert.equal(e.especialidad, 'electricas');
+  assert.equal(e.grupo, 'Salidas');
+  e.partidas.manual.cantidad = 16;
+  const r = calcPartidaElemento(e, 'manual', T);
+  assert.equal(r.und, 'pto');
+  cerca(r.cantidad, 16);
+  cerca(r.materiales.find((x) => x.nombre === 'Conductor THW 2.5 mm²').cantidad, 160);
+  cerca(r.rendimiento.dias, 2); // 16 pto ÷ 8 pto/día
+});
+
+test('mis partidas: guardar como plantilla y cambiar de especialidad', () => {
+  const e = nuevaDesdePlantilla(CATALOGO.find((x) => x.esp === 'sanitarias'), 'x2');
+  e.nombre = 'Mi salida especial';
+  e.partidas.manual.materiales.push({ nombre: '', und: 'und', porUnidad: 1 });
+  const pl = plantillaDesde(e);
+  assert.equal(pl.esp, 'sanitarias');
+  assert.ok(pl.materiales.every((x) => x.nombre), 'no guarda materiales vacíos');
+  const copia = nuevaDesdePlantilla(pl, 'x3');
+  assert.equal(copia.nombre, 'Mi salida especial');
+  moverEspecialidad(copia, 'otras');
+  assert.equal(copia.tipo, 'manual');
+  assert.equal(copia.especialidad, 'otras');
+  const viga = nuevoElemento('viga', 'V', 'x4');
+  moverEspecialidad(viga, 'electricas');
+  assert.equal(viga.tipo, 'viga', 'una viga no cambia de especialidad');
+});
+
+// ---------- v12: detalle por filas, accesorios al pedido y subtemas ----------
+import { parcialFila, metradoManual } from '../calc/elemento.js';
+import { subtemasEspecialidad, subtemaDe } from '../data/elementos.js';
+import { lineasPlanilla } from '../ui/planilla.js';
+
+test('parcial de una fila: N° veces × medidas llenas; veces negativas descuentan', () => {
+  assert.equal(parcialFila({ veces: 2, largo: 5, alto: 2.4 }), 24);
+  assert.equal(parcialFila({ veces: '', largo: 3 }), 3, 'veces vacío = 1');
+  assert.equal(parcialFila({ veces: 12 }), 12, 'solo cantidad (accesorios)');
+  cerca(parcialFila({ veces: -1, largo: 0.9, alto: 2.1 }), -1.89);
+  assert.equal(parcialFila({ veces: '3*2', largo: '10/2' }), 30, 'acepta fórmulas');
+  cerca(metradoManual({ modoMetrado: 'detalle', detalle: [{ veces: 2, largo: 5, alto: 2.4 }, { veces: -1, largo: 0.9, alto: 2.1 }] }), 24 - 1.89);
+  assert.equal(metradoManual({ modoMetrado: 'valor', cantidad: 7, detalle: [{ veces: 99 }] }), 7, 'en modo valor no usa el detalle');
+});
+
+test('accesorios de redes de agua: cada fila va al pedido con su cantidad', () => {
+  const pl = CATALOGO.find((x) => x.nombre.startsWith('Accesorios de redes de agua'));
+  const e = nuevaDesdePlantilla(pl, 'a1');
+  const p = e.partidas.manual;
+  assert.equal(p.modoMetrado, 'detalle');
+  p.detalle.find((f) => f.desc === 'Codo PVC 1/2" × 90°').veces = 12;
+  p.detalle.find((f) => f.desc === 'Tee PVC 1/2"').veces = 5;
+  e.n = 2; // dos departamentos iguales
+  const r = calcPartidaElemento(e, 'manual', T);
+  cerca(r.cantidad, 34);
+  cerca(r.materiales.find((x) => x.nombre === 'Codo PVC 1/2" × 90°').cantidad, 24);
+  cerca(r.materiales.find((x) => x.nombre === 'Tee PVC 1/2"').cantidad, 10);
+  assert.ok(!r.materiales.some((x) => x.nombre === 'Niple PVC 1/2"'), 'los que quedan en 0 no salen');
+  cerca(r.materiales.find((x) => x.nombre === 'Pegamento PVC').cantidad, 34 * 0.003);
+  // Guardado en Mis partidas conserva las filas
+  assert.ok(plantillaDesde(e).detalle.length >= 10);
+});
+
+test('subtemas con código de la norma y planilla ordenada', () => {
+  const tarr = nuevaDesdePlantilla(CATALOGO.find((x) => x.nombre.startsWith('Tarrajeo de muros interiores')), 's1');
+  tarr.partidas.manual.modoMetrado = 'detalle';
+  tarr.partidas.manual.detalle = [{ desc: 'Muro eje A', veces: 2, largo: 5, alto: 2.4 }, { desc: 'Vano puerta', veces: -1, largo: 0.9, alto: 2.1 }];
+  const propio = Object.assign(nuevaDesdePlantilla({ esp: 'arquitectura', nombre: 'Enchape de piedra', und: 'm²', rend: 6 }, 's2'), { grupo: 'Enchapes especiales' });
+  const muro = nuevoElemento('muro', 'M-1', 's3');
+  const subs = subtemasEspecialidad('arquitectura', [propio, tarr, muro]);
+  assert.deepEqual(subs.map((x) => `${x.codigo} ${x.nombre}`), ['OE.3.1 Muros y tabiques de albañilería', 'OE.3.2 Revoques y enlucidos', 'OE.3.9 Enchapes especiales']);
+  assert.equal(subtemaDe({ ...propio, grupo: 'revoques y enlucidos' }), 'Revoques y enlucidos', 'sin importar mayúsculas');
+  const L = lineasPlanilla({ elementos: [tarr, muro, propio] }, T);
+  assert.deepEqual(L.filter((x) => x.nivel !== 'fila').map((x) => x.item), ['OE.3', 'OE.3.1', 'OE.3.1.1', 'OE.3.1.1.1', 'OE.3.2', 'OE.3.2.1', 'OE.3.9', 'OE.3.9.1']);
+  const filasTarr = L.slice(L.findIndex((x) => x.item === 'OE.3.2.1') + 1, L.findIndex((x) => x.item === 'OE.3.9'));
+  assert.equal(filasTarr.length, 2);
+  cerca(filasTarr[1].parcial, -1.89);
+  cerca(L.find((x) => x.item === 'OE.3.2.1').total, 24 - 1.89);
 });

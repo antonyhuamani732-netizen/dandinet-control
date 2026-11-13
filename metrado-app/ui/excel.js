@@ -1,19 +1,20 @@
 // Plantilla Excel, importación con validación y exportación del proyecto en el mismo formato.
 // Recibe la librería XLSX (SheetJS) ya cargada, así se puede probar en Node.
-import { TIPOS, nuevoElemento, medidas } from '../data/elementos.js';
+import { TIPOS, ESPECIALIDADES, LIBRE_POR_ESP, esLibre, nuevoElemento, medidas } from '../data/elementos.js';
+import { CATALOGO } from '../data/catalogo.js';
 import { piezasItem, tramosATexto } from '../calc/acero.js';
-import { contextoAcero } from '../calc/elemento.js';
+import { contextoAcero, metradoManual } from '../calc/elemento.js';
 import { tramosDesdeTexto, uid } from '../storage.js';
 import { num, evaluar } from '../calc/util.js';
 
-const ESTRUCTURAS = Object.keys(TIPOS).filter((k) => TIPOS[k].esp === 'estructuras');
+const ESTRUCTURAS = Object.keys(TIPOS).filter((k) => TIPOS[k].esp === 'estructuras' && !TIPOS[k].libre);
 const LETRAS = ['b', 'h', 'H', 'L', 'A', 'B', 'e', 't', 'np', 'p', 'cp'];
 const COL_EL = ['Elemento', 'Tipo', 'Cantidad', ...LETRAS, 'Concreto', 'Peralte losa (cm)', 'Clase de viga', 'Recubrimiento (cm)',
   'Incluir concreto', 'Incluir encofrado', 'Incluir acero', 'Concreto fijo (m3)', 'Encofrado fijo (m2)', 'Acero fijo (kg)'];
 const COL_AC = ['Elemento', 'Tipo de acero', 'Descripción', 'Diámetro', 'Cantidad', 'Longitud (m)', 'Separación (m)', 'Dirección',
   'Ganchos', 'Distribución', 'Sección b (m)', 'Sección h (m)', 'Gancho estribo (m)'];
 const COL_MU = ['Elemento', 'Cantidad', 'Largo L (m)', 'Alto H (m)', 'Ladrillo', 'Aparejo', 'Junta (cm)', 'Mortero', 'Vanos'];
-const COL_MA = ['Partida', 'Unidad', 'Metrado', 'Cantidad', 'Rendimiento (und/día)', 'Capataz', 'Operario', 'Oficial', 'Peón'];
+const COL_MA = ['Partida', 'Unidad', 'Metrado', 'Cantidad', 'Rendimiento (und/día)', 'Capataz', 'Operario', 'Oficial', 'Peón', 'Especialidad', 'Subtítulo'];
 
 const si = (v) => /^(s[ií]|x|1|true|verdadero)$/i.test(String(v ?? '').trim());
 const texto = (v) => String(v ?? '').trim();
@@ -27,7 +28,7 @@ function instrucciones(T) {
     ['Paso', 'Qué hacer'],
     ['1', 'Llena una fila por elemento en la hoja Elementos (zapatas, columnas, vigas, losas, escaleras, cimientos…).'],
     ['2', 'En la hoja Acero, una fila por grupo de barras, malla o estribos. La columna Elemento debe ser igual al nombre de la hoja Elementos.'],
-    ['3', 'Muros en la hoja Muros; partidas libres (excavación, tarrajeo…) en la hoja Manual.'],
+    ['3', 'Muros en la hoja Muros; partidas libres (excavación, tarrajeo, salidas eléctricas y sanitarias…) en la hoja Manual. Especialidad: OE.2, OE.3, OE.4 (sanitarias), OE.5 (eléctricas) u OE.X; si la dejas vacía va a Otras partidas.'],
     ['4', 'Borra las filas de ejemplo que no uses. No cambies los títulos de las columnas.'],
     ['5', 'Guarda el archivo y en la app: Proyectos › Datos › Importar Excel. Verás una vista previa con los errores antes de agregar nada.'],
     [],
@@ -72,7 +73,8 @@ const EJEMPLO = {
     ['Z-1', 'malla', 'Malla inferior Y', '1/2', '', '', 0.15, 'Y', 2, '', '', '', ''],
   ],
   muros: [['M-1', 1, 8, 2.6, 'kk18', 'soga', 1.5, '1:4', '0.9x2.1x1; 1.2x1.0x2']],
-  manual: [['Excavación de zanjas', 'm3', 14.5, 1, 3.5, 0.1, 0, 0, 1]],
+  manual: [['Excavación de zanjas', 'm3', 14.5, 1, 3.5, 0.1, 0, 0, 1, 'OE.2', 'Movimiento de tierras'],
+    ['Salida para tomacorriente doble con línea a tierra', 'pto', 12, 1, 8, 0.1, 1, 0.5, 0, 'OE.5', 'Salidas']],
 };
 
 function hoja(XLSX, filas, anchos) {
@@ -106,10 +108,11 @@ export function exportarProyecto(XLSX, proyecto, T) {
         (p.vanos || []).map((v) => `${v.ancho}x${v.alto}x${v.cant}`).join('; ')]);
       continue;
     }
-    if (el.tipo === 'manual') {
+    if (esLibre(el.tipo)) {
       const p = el.partidas.manual;
       const c = p.cuadrilla || {};
-      datos.manual.push([el.nombre, p.und, p.cantidad, el.n, p.rend, c.capataz, c.operario, c.oficial, c.peon]);
+      datos.manual.push([el.nombre, p.und, Math.round(metradoManual(p) * 1000) / 1000, el.n, p.rend, c.capataz, c.operario, c.oficial, c.peon,
+        ESPECIALIDADES[el.especialidad]?.codigo || '', el.grupo || '']);
       continue;
     }
     const pa = el.partidas;
@@ -278,7 +281,11 @@ export function importarLibro(XLSX, wb, T, nombreProyecto = 'Proyecto importado'
   for (const { f, fila } of filas(XLSX, wb, 'Manual')) {
     const nombre = texto(f.Partida);
     if (!nombre) continue;
-    const el = nuevoElemento('manual', nombre, uid());
+    const espTxt = texto(f.Especialidad).toLowerCase();
+    const esp = Object.keys(ESPECIALIDADES).find((k) => espTxt && (ESPECIALIDADES[k].codigo.toLowerCase() === espTxt || ESPECIALIDADES[k].nombre.toLowerCase() === espTxt || k === espTxt)) || 'otras';
+    // Sin especialidad o con una que no se reconoce: va a Otras partidas (no se pierde la fila).
+    const el = nuevoElemento(LIBRE_POR_ESP[esp], nombre, uid());
+    if (texto(f['Subtítulo'])) el.grupo = texto(f['Subtítulo']);
     const met = numero(f.Metrado);
     if (!met.ok) { err('Manual', fila, 'Metrado no es un número'); continue; }
     el.n = num(f.Cantidad) || 1;
@@ -286,6 +293,9 @@ export function importarLibro(XLSX, wb, T, nombreProyecto = 'Proyecto importado'
       und: texto(f.Unidad) || 'und', cantidad: met.v === '' ? 0 : met.v, rend: num(f['Rendimiento (und/día)']) || 1,
       cuadrilla: { capataz: num(f.Capataz), operario: num(f.Operario), oficial: num(f.Oficial), peon: num(f['Peón']) },
     });
+    // Si la partida está en el catálogo, trae sus materiales por unidad.
+    const delCatalogo = CATALOGO.find((x) => x.esp === esp && x.nombre.toLowerCase() === nombre.toLowerCase());
+    if (delCatalogo) el.partidas.manual.materiales = delCatalogo.materiales.map((x) => ({ ...x }));
     elementos.push(el);
   }
 

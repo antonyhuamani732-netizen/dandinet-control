@@ -132,7 +132,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* formularios */
 .editor { display: flex; flex-direction: column; gap: 14px; }
-.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 12px; }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 12px; }
 .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .campo.ancho { grid-column: 1 / -1; }
 .campo span { font-size: 0.82rem; color: var(--tenue); font-weight: 500; }
@@ -293,7 +293,7 @@ dialog::backdrop { background: rgb(10 12 11 / 0.55); }
 }
 @media (min-width: 800px) and (min-height: 501px) {
   .hoja { width: min(1180px, 96vw); max-width: none; height: 92dvh; max-height: 92dvh; margin: auto; border-radius: 16px; }
-  .hoja .rejilla { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .hoja .rejilla { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 }
 .modo-editor { display: none; }
 @media (min-width: 1000px) { .modo-editor { display: inline-grid; place-items: center; } .modo-editor svg { width: 18px; height: 18px; } }
@@ -487,7 +487,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.9em; 
     position: fixed; inset: 0 0 0 auto; margin: 0; width: min(58vw, 820px); height: 100dvh; max-height: none;
     border-radius: 0; border-left: 1px solid var(--linea); box-shadow: -8px 0 24px rgb(0 0 0 / 0.25); z-index: 30;
   }
-  body.con-panel .hoja .rejilla { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  body.con-panel .hoja .rejilla { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   body.con-panel .fab { right: calc(min(58vw, 820px) + 24px); }
   body.con-panel .tabs, body.con-panel .barra { margin-right: min(58vw, 820px); max-width: none; }
   .tabs { max-width: 1280px; margin: 0 auto; }
@@ -739,3 +739,157 @@ h1, h2, h3, h4, h5 { font-family: var(--display); font-weight: 800; letter-spaci
 .barra h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(1rem, 4.4vw, 1.2rem); }
 .marca > div { min-width: 0; }
 .aviso { box-shadow: var(--sombra); border: 1px solid var(--linea); }
+
+/* ================= v11: especialidades, catálogo, datos del proyecto y orden ================= */
+/* Partidas: textos largos se parten en vez de desbordar */
+.cab-proyecto { align-items: flex-start; }
+.cab-titulo { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.cab-titulo h2 { overflow-wrap: anywhere; }
+.meta-proyecto { margin: 0; overflow-wrap: anywhere; }
+.esp-cab .titulo { min-width: 0; overflow-wrap: anywhere; line-height: 1.15; }
+.esp-cab small { flex: none; white-space: nowrap; }
+.grupo-cab { flex-wrap: wrap; row-gap: 2px; }
+.grupo-cab .titulo { flex: 1 1 180px; min-width: 0; }
+.grupo-cab .titulo .titulo-txt { min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
+.grupo-cab .titulo .cuenta { flex: none; font-weight: 600; }
+.grupo-cab small { flex: 0 1 auto; min-width: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.tarjeta-nombre .nombre { line-height: 1.25; }
+.tarjeta-nombre small { overflow-wrap: anywhere; }
+.pchip { max-width: 100%; }
+.pchip b { white-space: nowrap; }
+.t-libre_san { color: #2d9cdb; } .t-libre_ele { color: #e2b007; } .t-libre_est { color: var(--t-encofrado); } .t-libre_arq { color: var(--t-muro); }
+.agregar-aqui { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; text-align: left; }
+.vacio-esp { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.vacio-esp p { margin: 0; }
+.vacio-botones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+/* Editor de partida libre: bloques ordenados */
+.caja { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radio); background: var(--hundido); }
+.caja h4 { margin: 0; font-size: 0.95rem; text-transform: none; letter-spacing: 0; color: var(--tinta); }
+.caja h4 small { color: var(--tenue); font-weight: 600; }
+.caja .campo input, .caja .campo select { background: var(--superficie); }
+.caja .campo input:focus, .caja .campo select:focus { background: var(--elevado); }
+.caja .nota { margin: 0; }
+.caja-mia { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.caja-mia .nota { flex: 1 1 220px; }
+.fila-mat { display: grid; grid-template-columns: minmax(0, 1fr) 40px; grid-template-areas: "n q" "u q" "c q"; gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--superficie); }
+.fila-mat > .campo:nth-child(1) { grid-area: n; }
+.fila-mat > .campo:nth-child(2) { grid-area: u; }
+.fila-mat > .campo:nth-child(3) { grid-area: c; }
+.fila-mat .campo input { background: var(--hundido); }
+.quitar-ico { grid-area: q; align-self: end; width: 40px; height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--peligro); cursor: pointer; display: grid; place-items: center; }
+.quitar-ico:hover { background: var(--hundido); }
+@media (min-width: 560px) {
+  .fila-mat { grid-template-columns: minmax(0, 3fr) minmax(70px, 1fr) minmax(90px, 1.3fr) 40px; grid-template-areas: "n u c q"; }
+}
+
+/* Selector: buscador + especialidades plegables + catálogo */
+.buscador { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--hundido); margin: 10px 0 4px; }
+.buscador .ico { color: var(--tenue); }
+.buscador input { flex: 1; min-width: 0; min-height: 44px; border: 0; background: transparent; color: var(--tinta); font-size: 1rem; outline: none; }
+.sel-lista { display: flex; flex-direction: column; gap: 8px; }
+.sel-esp { border-radius: var(--radio); background: var(--hundido); }
+.sel-esp > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px; }
+.sel-esp > summary::-webkit-details-marker { display: none; }
+.sel-esp > summary .codigo { font-family: var(--display); font-size: 0.8rem; font-weight: 700; background: var(--acento); color: var(--acento-tinta); border-radius: 999px; padding: 2px 8px; flex: none; }
+.sel-esp > summary .titulo { flex: 1; min-width: 0; font-family: var(--display); font-weight: 800; font-size: 1.05rem; display: inline-flex; align-items: center; gap: 8px; }
+.sel-esp > summary .titulo .ico { color: var(--acento); }
+.sel-esp > summary .flecha { transform: rotate(-45deg); margin-top: 0; }
+.sel-esp[open] > summary .flecha { transform: rotate(45deg); margin-top: -4px; }
+.sel-cuerpo { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.sel-cuerpo .opcion-tipo { background: var(--superficie); }
+.cat-grupo { display: flex; flex-direction: column; gap: 6px; }
+.cat-grupo h5 { margin: 0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tenue); display: flex; align-items: center; gap: 6px; }
+.cat-grupo.mias h5 { color: var(--acento); }
+.lista-partidas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
+.opcion-partida { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 10px; background: var(--superficie); color: var(--tinta); cursor: pointer; font-weight: 600; }
+.opcion-partida:hover { background: var(--elevado); }
+.opcion-partida .op-nombre { min-width: 0; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 6px; line-height: 1.25; }
+.opcion-partida .op-nombre .ico { color: var(--acento); }
+.opcion-partida .op-und { flex: none; font-size: 0.8rem; color: var(--tenue); background: var(--hundido); border-radius: 999px; padding: 2px 8px; }
+.opcion-partida.nueva { justify-content: center; border: 1px dashed var(--tenue); background: transparent; }
+.sin-resultados { text-align: center; }
+
+/* Datos del proyecto */
+.form-proyecto { display: flex; flex-direction: column; gap: 12px; }
+.form-proyecto .flot-cab { margin-bottom: 0; }
+.form-proyecto .nota { margin: 0; }
+.esp-elegir { border: 1px solid var(--linea); border-radius: var(--radio); padding: 8px 12px 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 12px; }
+.esp-elegir legend { font-weight: 700; padding: 0 6px; }
+.datos-proyecto { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 14px; }
+.datos-proyecto dt, .inf-datos dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tenue); }
+.datos-proyecto dd, .inf-datos dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.acciones-fila { display: flex; flex-wrap: wrap; gap: 8px; }
+.inf-datos { margin: 6px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px 16px; }
+
+/* Mis partidas (Tablas) */
+.lista-mias { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mia-fila { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--hundido); }
+.mia-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mia-txt b { overflow-wrap: anywhere; }
+.mia-txt small { color: var(--tenue); overflow-wrap: anywhere; }
+@media (max-width: 480px) { .esp-cab .titulo { font-size: 1.2rem; } .grupo-cab .titulo { font-size: 1.02rem; } .cab-vista h2 { font-size: 1.35rem; } }
+
+/* v11: nombres largos en varias líneas (sin cortarse) */
+.hoja-nombre > textarea, .nombre-proyecto { resize: none; field-sizing: content; min-height: 0; overflow: hidden; line-height: 1.2; color: var(--tinta); font-family: var(--display); font-weight: 700; }
+.hoja-nombre > textarea { flex: 1; min-width: 0; font-size: 1.3rem; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px; margin-left: -8px; background: transparent; }
+.hoja-nombre > textarea:focus { border-color: var(--acento); background: var(--bg); outline: none; }
+.nombre-proyecto { display: block; }
+@media (max-width: 480px) { .hoja-nombre > textarea { font-size: 1.1rem; } }
+.rejilla-ancha, .form-proyecto .rejilla { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important; }
+@media (max-width: 559px) {
+  .fila-mat { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; grid-template-areas: "n n n" "u c q"; }
+}
+
+/* ================= v12: subtemas, detalle de metrado por filas ================= */
+.sub-cod { flex: none; font-family: var(--texto); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--acento); background: var(--hundido); border-radius: 999px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
+.grupo-cab .titulo .sub-cod { font-size: 0.72rem; }
+.cat-grupo h5 .sub-cod { margin-right: 2px; }
+.pildora .sub-cod { background: var(--elevado); }
+.agregar-fila { display: flex; flex-wrap: wrap; gap: 8px; }
+.subtemas-vacios { display: flex; flex-wrap: wrap; gap: 6px; }
+.subtemas-vacios .pildora { font-size: 0.85rem; min-height: 36px; padding: 6px 12px; }
+.vacio-txt { margin: 0; }
+.pl-sub td { background: var(--elevado) !important; font-weight: 800; letter-spacing: 0.02em; }
+
+/* Detalle por filas (como la planilla) */
+.caja .segmento { align-self: flex-start; }
+.detalle { display: flex; flex-direction: column; gap: 8px; }
+.fila-det { display: grid; gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--superficie);
+  grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "d d d d" "v l a h" "p p p p" "f f f f"; }
+.fila-det.es-material { box-shadow: inset 3px 0 0 var(--acento); }
+.fila-det > .campo:nth-child(1) { grid-area: d; }
+.fila-det > .campo:nth-child(2) { grid-area: v; }
+.fila-det > .campo:nth-child(3) { grid-area: l; }
+.fila-det > .campo:nth-child(4) { grid-area: a; }
+.fila-det > .campo:nth-child(5) { grid-area: h; }
+.fila-det .campo input { background: var(--hundido); min-height: 40px; padding: 6px 8px; }
+.fila-det .campo span { font-size: 0.75rem; }
+.det-parcial { grid-area: p; display: flex; justify-content: space-between; align-items: baseline; padding: 2px 2px 0; }
+.det-parcial span { font-size: 0.75rem; color: var(--tenue); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.det-parcial output { font-weight: 800; font-variant-numeric: tabular-nums; }
+.det-pie { grid-area: f; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.det-pie .check { min-height: 36px; font-size: 0.9rem; }
+.det-pie .det-und { flex: 0 1 110px; flex-direction: row; align-items: center; gap: 6px; }
+.det-pie .det-und input { min-height: 36px; }
+.det-pie .quitar-ico { margin-left: auto; height: 36px; }
+.det-total { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--superficie); border-left: 4px solid var(--acento); }
+.det-total span { font-weight: 700; }
+.det-total b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+@media (min-width: 700px) {
+  .fila-det { grid-template-columns: minmax(0, 3fr) repeat(4, minmax(64px, 1fr)) minmax(80px, 1fr); grid-template-areas: "d v l a h p" "f f f f f f"; align-items: end; }
+  .det-parcial { flex-direction: column; align-items: flex-end; justify-content: flex-end; padding-bottom: 10px; }
+}
+/* Accesorios (van al pedido): fila compacta */
+.fila-acc { display: grid; gap: 6px 8px; padding: 8px 10px; border-radius: 10px; background: var(--superficie); box-shadow: inset 3px 0 0 var(--acento); align-items: end;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) auto 40px; grid-template-areas: "d d d d" "v u c q"; }
+.fila-acc > .campo:nth-child(1) { grid-area: d; }
+.fila-acc > .campo:nth-child(2) { grid-area: v; }
+.fila-acc > .campo:nth-child(3) { grid-area: u; }
+.fila-acc > .check { grid-area: c; min-height: 40px; font-size: 0.85rem; }
+.fila-acc > .quitar-ico { grid-area: q; height: 40px; }
+.fila-acc .campo input { background: var(--hundido); min-height: 40px; padding: 6px 8px; }
+.fila-acc .campo span { font-size: 0.75rem; }
+@media (min-width: 700px) {
+  .fila-acc { grid-template-columns: minmax(0, 3fr) minmax(70px, 0.8fr) minmax(60px, 0.6fr) auto 40px; grid-template-areas: "d v u c q"; }
+}

@@ -26,6 +26,25 @@ export function contextoAcero(el) {
   };
 }
 
+// ---------- detalle de metrado por filas (como la planilla: N° veces × largo × ancho × alto) ----------
+const lleno = (v) => v !== null && v !== undefined && String(v).trim() !== '';
+
+// Parcial de una fila: N° veces (1 si está vacío) por las medidas que tengan valor.
+// Veces negativas sirven para descontar (vanos, por ejemplo).
+export function parcialFila(fila = {}) {
+  let x = lleno(fila.veces) ? num(fila.veces) : 1;
+  for (const k of ['largo', 'ancho', 'alto']) if (lleno(fila[k])) x *= num(fila[k]);
+  return x;
+}
+
+export const usaDetalle = (p) => p?.modoMetrado === 'detalle' && Array.isArray(p.detalle);
+
+// Metrado de UN elemento de la partida libre: suma de filas o el valor único.
+export function metradoManual(p) {
+  if (usaDetalle(p)) return p.detalle.reduce((s, f) => s + parcialFila(f), 0);
+  return num(p.cantidad);
+}
+
 // Método de hoja de cálculo: REDONDEAR.MAS(kg ÷ peso de una varilla × (1 + %)).
 export function varillasPorPeso(kgPorDiam, T) {
   const V = num(T.acero.longitudVarilla);
@@ -106,14 +125,18 @@ function calcular(clave, el, p, T0) {
     return calcMuro({ ...p, largo: m.L, alto: m.H, n }, T);
   }
   if (clave === 'manual') {
-    const cant = num(p.cantidad) * n;
-    return {
-      cantidad: cant,
-      und: p.und || 'und',
-      materiales: (p.materiales || []).filter((x) => x.nombre).map((x, i) => mat(`man_${x.nombre.toLowerCase()}`, x.nombre, x.und || 'und', cant * num(x.porUnidad))),
-      detalle: '',
-      rendKey: null,
-    };
+    const cant = metradoManual(p) * n;
+    const und = p.und || 'und';
+    const materiales = (p.materiales || []).filter((x) => x.nombre).map((x) => mat(`man_${x.nombre.toLowerCase()}`, x.nombre, x.und || 'und', cant * num(x.porUnidad)));
+    // Filas del detalle marcadas "va al pedido": cada una es un material con su propia cantidad (codos, tees…).
+    if (usaDetalle(p)) {
+      for (const fila of p.detalle) {
+        const nombre = String(fila.desc || '').trim();
+        const q = parcialFila(fila) * n;
+        if (fila.material && nombre && q > 0) materiales.push(mat(`man_${nombre.toLowerCase()}`, nombre, fila.und || und, q));
+      }
+    }
+    return { cantidad: cant, und, materiales, detalle: usaDetalle(p) ? `${p.detalle.length} filas de detalle` : '', rendKey: null };
   }
   throw new Error(`Partida desconocida: ${clave}`);
 }

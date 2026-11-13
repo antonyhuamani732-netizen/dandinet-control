@@ -44,12 +44,22 @@ const P = {
   cimiento: '<path d="M2 14h20M4 14v6h16v-6M8 14V9h8v5"/>',
   placa: '<path d="M6 3h12v18H6zM6 9h12M6 15h12"/>',
   menu: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  rayo: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  gota: '<path d="M12 3s6 6.6 6 11a6 6 0 0 1-12 0c0-4.4 6-11 6-11z"/>',
+  pala: '<path d="M14 4l6 6M17 7l-8 8"/><path d="M9 15l-4 4a2 2 0 0 1-3-3l4-4z"/>',
+  rodillo: '<rect x="4" y="3" width="14" height="6" rx="1"/><path d="M18 6h2v5h-8v3M11 14h2v7h-2z"/>',
+  buscar: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  estrella: '<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
 };
 
 export const ICONO_TIPO = {
   cimiento: 'cimiento', sobrecimiento: 'cimiento', zapata: 'zapata', columna: 'columna', viga: 'viga',
   placa: 'placa', losa_maciza: 'losa', losa_aligerada: 'losa', escalera: 'escalera', muro: 'muro', manual: 'manual',
+  libre_est: 'pala', libre_arq: 'rodillo', libre_san: 'gota', libre_ele: 'rayo',
 };
+
+// Icono de cada especialidad (cabeceras y selector).
+export const ICONO_ESP = { estructuras: 'columna', arquitectura: 'muro', sanitarias: 'gota', electricas: 'rayo', otras: 'manual' };
 
 export function icono(nombre, clase = '') {
   return `<svg class="ico ${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[nombre] || P.info}</svg>`;

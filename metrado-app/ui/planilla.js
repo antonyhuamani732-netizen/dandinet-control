@@ -1,19 +1,12 @@
 // Planillas al estilo CAPECO: metrados por partida y planilla de acero por diámetro.
-import { TIPOS, medidas } from '../data/elementos.js';
-import { calcPartidaElemento, esFijo, varillasPorPeso } from '../calc/elemento.js';
+import { TIPOS, ESPECIALIDADES, medidas, esLibre, subtemasEspecialidad } from '../data/elementos.js';
+import { calcPartidaElemento, esFijo, varillasPorPeso, parcialFila, usaDetalle } from '../calc/elemento.js';
 import { cortePorDiametro } from '../calc/corte.js';
 import { num } from '../calc/util.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const f = (n, d = 2) => (Number.isFinite(n) && n !== 0 ? n.toLocaleString('es-PE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '');
 
-// Subcapítulos de estructuras como en el presupuesto CAPECO.
-const CAPITULO = {
-  cimiento: 'OE.2.2', sobrecimiento: 'OE.2.2',
-  zapata: 'OE.2.3', columna: 'OE.2.3', viga: 'OE.2.3', placa: 'OE.2.3', losa_maciza: 'OE.2.3', losa_aligerada: 'OE.2.3', escalera: 'OE.2.3',
-  muro: 'OE.3.1', manual: 'OE.X',
-};
-const NOMBRE_CAP = { 'OE.2.2': 'Obras de concreto simple', 'OE.2.3': 'Obras de concreto armado', 'OE.3.1': 'Muros y tabiques de albañilería', 'OE.X': 'Otras partidas' };
 const NOMBRE_PARTIDA = {
   concreto: (el, T) => (el.mezcla === 'ciclopeo' ? `Concreto ${T.concreto.ciclopeo[el.tipo]?.nombre || 'ciclópeo'}` : `Concreto f'c = ${el.mezcla} kg/cm²`),
   encofrado: () => 'Encofrado y desencofrado',
@@ -22,33 +15,75 @@ const NOMBRE_PARTIDA = {
   manual: (el) => el.nombre,
 };
 
-// Filas de la planilla de metrados agrupadas por capítulo → tipo → partida.
-export function filasMetrado(proyecto, T) {
-  const caps = new Map();
-  for (const el of proyecto.elementos) {
-    if (el.oculto) continue;
-    const cap = CAPITULO[el.tipo] || 'OE.X';
-    for (const c of Object.keys(el.partidas)) {
-      const p = el.partidas[c];
-      if (p.activa === false) continue;
-      const r = calcPartidaElemento(el, c, T);
-      if (!caps.has(cap)) caps.set(cap, new Map());
-      const tipos = caps.get(cap);
-      if (!tipos.has(el.tipo)) tipos.set(el.tipo, new Map());
-      const partidas = tipos.get(el.tipo);
-      const k = `${c}:${c === 'concreto' ? el.mezcla : ''}:${c === 'manual' ? el.id : ''}`;
-      if (!partidas.has(k)) partidas.set(k, { nombre: NOMBRE_PARTIDA[c](el, T), und: r.und, filas: [], total: 0 });
-      const g = partidas.get(k);
-      const dims = dimsFila(el, c, p);
-      g.filas.push({ el, clave: c, r, ...dims });
-      if (!r.error) g.total += r.cantidad;
+// Líneas de la planilla de metrados, en el orden de la norma:
+// especialidad (OE.4) → subtema (OE.4.2) → [tipo, para columnas, vigas…] → partida → filas.
+// Cada línea: { nivel: 'cap'|'sub'|'tipo'|'partida'|'fila', item, desc, und, veces, largo, ancho, alto, parcial, total, nota, error }
+export function lineasPlanilla(proyecto, T) {
+  const L = [];
+  const visibles = proyecto.elementos.filter((el) => !el.oculto && Object.values(el.partidas).some((p) => p.activa !== false));
+  for (const [ek, esp] of Object.entries(ESPECIALIDADES)) {
+    const subs = subtemasEspecialidad(ek, visibles);
+    if (!subs.length) continue;
+    L.push({ nivel: 'cap', item: esp.codigo, desc: esp.nombre });
+    for (const sub of subs) {
+      L.push({ nivel: 'sub', item: sub.codigo, desc: sub.nombre });
+      // Bloques: uno por tipo con figura (Zapatas, Columnas…) y uno por cada partida libre.
+      const bloques = [];
+      for (const el of sub.els) {
+        if (esLibre(el.tipo)) { bloques.push({ libre: true, els: [el] }); continue; }
+        let b = bloques.find((x) => x.tipo === el.tipo);
+        if (!b) { b = { tipo: el.tipo, els: [] }; bloques.push(b); }
+        b.els.push(el);
+      }
+      bloques.forEach((b, i) => {
+        const item = `${sub.codigo}.${i + 1}`;
+        if (b.libre) { lineasLibre(L, b.els[0], item, T); return; }
+        L.push({ nivel: 'tipo', item, desc: TIPOS[b.tipo].plural });
+        const partidas = new Map();
+        for (const el of b.els) {
+          for (const c of Object.keys(el.partidas)) {
+            const p = el.partidas[c];
+            if (p.activa === false) continue;
+            const r = calcPartidaElemento(el, c, T);
+            const k = `${c}:${c === 'concreto' ? el.mezcla : ''}`;
+            if (!partidas.has(k)) partidas.set(k, { nombre: NOMBRE_PARTIDA[c](el, T), und: r.und, filas: [], total: 0 });
+            const g = partidas.get(k);
+            g.filas.push({ nivel: 'fila', desc: el.nombre, veces: num(el.n), parcial: r.cantidad, error: r.error, ...dimsFila(el, c, p) });
+            if (!r.error) g.total += r.cantidad;
+          }
+        }
+        [...partidas.values()].forEach((g, j) => {
+          L.push({ nivel: 'partida', item: `${item}.${j + 1}`, desc: g.nombre, und: g.und, total: g.total });
+          L.push(...g.filas);
+        });
+      });
     }
   }
-  return caps;
+  return L;
+}
+
+// Partida libre: una línea de partida y, si tiene detalle, una línea por fila (N° veces × largo × ancho × alto).
+function lineasLibre(L, el, item, T) {
+  const p = el.partidas.manual;
+  if (p.activa === false) return;
+  const r = calcPartidaElemento(el, 'manual', T);
+  const n = num(el.n) || 1;
+  L.push({ nivel: 'partida', item, desc: el.nombre, und: r.und, total: r.cantidad, nota: n > 1 ? `× ${n} iguales` : '' });
+  if (usaDetalle(p)) {
+    for (const fila of p.detalle) {
+      L.push({
+        nivel: 'fila', desc: fila.desc || '—', veces: fila.veces === '' ? 1 : num(fila.veces),
+        largo: num(fila.largo), ancho: num(fila.ancho), alto: num(fila.alto), parcial: parcialFila(fila) * n,
+        nota: fila.material ? 'va al pedido' : '',
+      });
+    }
+  } else {
+    L.push({ nivel: 'fila', desc: el.nombre, veces: n, parcial: r.cantidad, error: r.error });
+  }
 }
 
 function dimsFila(el, c, p) {
-  if (esFijo(p) && c !== 'manual') return { nota: 'metrado fijo' };
+  if (esFijo(p)) return { nota: 'metrado fijo' };
   const t = TIPOS[el.tipo];
   const m = medidas(el);
   if (c === 'concreto') {
@@ -67,29 +102,19 @@ function dimsFila(el, c, p) {
 }
 
 export function planillaMetradosHTML(proyecto, T) {
-  const caps = filasMetrado(proyecto, T);
-  let filas = '';
-  let iCap = 0;
-  for (const [cap, tipos] of [...caps].sort(([a], [b]) => a.localeCompare(b))) {
-    filas += `<tr class="pl-cap"><td>${esc(cap)}</td><td colspan="8">${esc(NOMBRE_CAP[cap]).toUpperCase()}</td></tr>`;
-    iCap++;
-    let iTipo = 0;
-    for (const [tipo, partidas] of tipos) {
-      iTipo++;
-      filas += `<tr class="pl-tipo"><td>${esc(cap)}.${iTipo}</td><td colspan="8">${esc(TIPOS[tipo].plural).toUpperCase()}</td></tr>`;
-      let iP = 0;
-      for (const g of partidas.values()) {
-        iP++;
-        filas += `<tr class="pl-partida"><td>${esc(cap)}.${iTipo}.${iP}</td><td>${esc(g.nombre)}</td><td>${esc(g.und)}</td><td colspan="5"></td><td class="n">${f(g.total)}</td></tr>`;
-        for (const x of g.filas) {
-          filas += `<tr><td></td><td class="pl-desc">${esc(x.el.nombre)}${x.nota ? ` <small>(${esc(x.nota)})</small>` : ''}${x.r.error ? ` <small class="error">${esc(x.r.error)}</small>` : ''}</td><td></td>
-            <td class="n">${f(num(x.el.n), 0)}</td><td class="n">${f(x.largo)}</td><td class="n">${f(x.ancho)}</td><td class="n">${f(x.alto)}</td>
-            <td class="n">${f(x.r.cantidad)}</td><td></td></tr>`;
-        }
-      }
+  const L = lineasPlanilla(proyecto, T);
+  if (!L.length) return '<p class="vacio">No hay partidas activas.</p>';
+  const filas = L.map((x) => {
+    if (x.nivel === 'cap' || x.nivel === 'sub' || x.nivel === 'tipo') {
+      return `<tr class="pl-${x.nivel === 'cap' ? 'cap' : x.nivel === 'sub' ? 'sub' : 'tipo'}"><td>${esc(x.item)}</td><td colspan="8">${esc(x.desc).toUpperCase()}</td></tr>`;
     }
-  }
-  if (!filas) return '<p class="vacio">No hay partidas activas.</p>';
+    if (x.nivel === 'partida') {
+      return `<tr class="pl-partida"><td>${esc(x.item)}</td><td>${esc(x.desc)}${x.nota ? ` <small>(${esc(x.nota)})</small>` : ''}</td><td>${esc(x.und)}</td><td colspan="5"></td><td class="n">${f(x.total)}</td></tr>`;
+    }
+    return `<tr><td></td><td class="pl-desc">${esc(x.desc)}${x.nota ? ` <small>(${esc(x.nota)})</small>` : ''}${x.error ? ` <small class="error">${esc(x.error)}</small>` : ''}</td><td></td>
+      <td class="n">${f(x.veces, Number.isInteger(x.veces) ? 0 : 2)}</td><td class="n">${f(x.largo)}</td><td class="n">${f(x.ancho)}</td><td class="n">${f(x.alto)}</td>
+      <td class="n">${f(x.parcial)}</td><td></td></tr>`;
+  }).join('');
   return `<div class="tabla-scroll planilla"><table class="tabla pl">
     <thead><tr><th>Ítem</th><th>Descripción</th><th>Und</th><th class="n">N° veces</th><th class="n">Largo</th><th class="n">Ancho</th><th class="n">Alto</th><th class="n">Parcial</th><th class="n">Total</th></tr></thead>
     <tbody>${filas}</tbody></table></div>`;
@@ -162,20 +187,10 @@ export function csvPlanillas(proyecto, T) {
   const q = (t) => `"${String(t ?? '').replace(/"/g, '""')}"`;
   const n = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : '');
   const L = [[q(`PLANILLA DE METRADOS · ${proyecto.nombre}`)], ['Item', 'Descripcion', 'Und', 'N veces', 'Largo', 'Ancho', 'Alto', 'Parcial', 'Total'].map(q)];
-  const caps = filasMetrado(proyecto, T);
-  for (const [cap, tipos] of [...caps].sort(([a], [b]) => a.localeCompare(b))) {
-    L.push([q(cap), q(NOMBRE_CAP[cap])]);
-    let iT = 0;
-    for (const [tipo, partidas] of tipos) {
-      iT++;
-      L.push([q(`${cap}.${iT}`), q(TIPOS[tipo].plural)]);
-      let iP = 0;
-      for (const g of partidas.values()) {
-        iP++;
-        L.push([q(`${cap}.${iT}.${iP}`), q(g.nombre), q(g.und), '', '', '', '', '', n(g.total)]);
-        for (const x of g.filas) L.push(['', q(x.el.nombre), '', n(num(x.el.n), 0), n(x.largo), n(x.ancho), n(x.alto), n(x.r.cantidad), '']);
-      }
-    }
+  for (const x of lineasPlanilla(proyecto, T)) {
+    if (x.nivel === 'cap' || x.nivel === 'sub' || x.nivel === 'tipo') L.push([q(x.item), q(x.desc)]);
+    else if (x.nivel === 'partida') L.push([q(x.item), q(x.nota ? `${x.desc} (${x.nota})` : x.desc), q(x.und), '', '', '', '', '', n(x.total)]);
+    else L.push(['', q(x.nota ? `${x.desc} (${x.nota})` : x.desc), '', n(x.veces, Number.isInteger(x.veces) ? 0 : 3), n(x.largo || NaN), n(x.ancho || NaN), n(x.alto || NaN), n(x.parcial), '']);
   }
   const a = datosAcero(proyecto, T);
   const D = T.acero.diametros;
